@@ -68,6 +68,8 @@ for f in sorted(glob.glob('work/audit/*.md')):
         rows.append((iid, title.replace('|', '/')[:150], sev, owner, status, fix, ver))
 order = {'Critical': 0, 'High': 1, 'Medium': 2, 'Low': 3, '?': 4}
 rows.sort(key=lambda r: (order[r[2]], r[0]))
+rows.append(('R2-01..09','Combined-build review (work/audit/review2.md): legacy restore credit, import-undo voids, void-aware ART anchor, scheduled-rule cancel, instructor rename access, cert id check, manager filter, diagnostic, reinstatement guard','High','Lead','Fixed (verified)','Commits 18ff44d, fe059b5','review2.test 0/9 → 9/9'))
+rows.append(('QA2-01..05','QA regression sweep 2 (work/audit/qa2.md): no functional regressions; follow-ups','Low','Lead','Fixed (verified) — 01, 04, 05; 02 (22 of 56 in-app checks) and 03 (report print freeze, pre-existing) open','Commit 0c9bbc4','runtime checks + all suites'))
 rows.append(('PV-01','Admin preview of the Staff portal could write to the real employee record (user request)','High','Lead','Fixed (verified)','staffPreviewReadOnly guard on all entry points and final writers; banner says read-only','preview.test 3/7 → 7/7'))
 rows.append(('R1-01..14','Independent review of batch 1 (work/audit/review1.md)','Medium','Lead','Fixed (verified) — 01,02,04,06,07,08,09,11; 10/05 via W2; 03 via W4 ADM-02; 12,13,14 Low deferred','See commit 9cff283','review1.test'))
 c = collections.Counter(r[2] for r in rows); cs = collections.Counter((r[2], r[4].split(' ')[0]) for r in rows)

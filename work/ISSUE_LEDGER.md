@@ -3,7 +3,7 @@
 Baseline: `HASC_LMS_v5_ATTENDANCE_DESCRIPTIONS_2026-09-22.html`. Regenerate with `python3 tools/ledger.py`.
 Full evidence, root cause, fix and test plan for each ID: `work/audit/<area>.md`.
 
-**140 findings** — Critical: 11, High: 46, Medium: 54, Low: 29
+**142 findings** — Critical: 11, High: 47, Medium: 54, Low: 30
 
 | ID | Description | Sev | Owner | Status | Fix implemented | Verification |
 |---|---|---|---|---|---|---|
@@ -145,5 +145,7 @@ Full evidence, root cause, fix and test plan for each ID: `work/audit/<area>.md`
 | UX-15 | Vendor and infrastructure jargon shown to managers and staff-facing users | Low | — | Open |  |  |
 | UX-17 | Missing or misleading empty states | Low | — | Open |  |  |
 | UX-18 | Location lists differ between screens and include junk entries | Low | — | Open |  |  |
+| R2-01..09 | Combined-build review (work/audit/review2.md): legacy restore credit, import-undo voids, void-aware ART anchor, scheduled-rule cancel, instructor rename access, cert id check, manager filter, diagnostic, reinstatement guard | High | Lead | Fixed (verified) | Commits 18ff44d, fe059b5 | review2.test 0/9 → 9/9 |
+| QA2-01..05 | QA regression sweep 2 (work/audit/qa2.md): no functional regressions; follow-ups | Low | Lead | Fixed (verified) — 01, 04, 05; 02 (22 of 56 in-app checks) and 03 (report print freeze, pre-existing) open | Commit 0c9bbc4 | runtime checks + all suites |
 | PV-01 | Admin preview of the Staff portal could write to the real employee record (user request) | High | Lead | Fixed (verified) | staffPreviewReadOnly guard on all entry points and final writers; banner says read-only | preview.test 3/7 → 7/7 |
 | R1-01..14 | Independent review of batch 1 (work/audit/review1.md) | Medium | Lead | Fixed (verified) — 01,02,04,06,07,08,09,11; 10/05 via W2; 03 via W4 ADM-02; 12,13,14 Low deferred | See commit 9cff283 | review1.test |
