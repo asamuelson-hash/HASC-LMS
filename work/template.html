@@ -1744,6 +1744,8 @@ window.HASC_COMPLETION_REFERENCE_20260915=[{"id":"2714","name":"Semel, Ben","pos
       .hasc-inst-att td:nth-child(4)::before{content:'Result';display:block;font-size:10.5px;font-weight:800;color:#667085;text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px}
       .hasc-staff-trx th:nth-child(2),.hasc-staff-trx td:nth-child(2){display:none!important}
       .hasc-staff-trx th,.hasc-staff-trx td{padding:8px 7px!important;font-size:12px!important}
+      .hasc-hop-banner{font-size:11px!important;line-height:1.3!important;padding:5px 10px!important;gap:6px!important}
+      .hasc-hop-banner button{padding:3px 9px!important;font-size:11px!important;min-height:30px!important}
     }
     @media screen and (max-width:430px){
       .hasc-header-actions{gap:7px!important}
@@ -1925,7 +1927,7 @@ window.HASC_COMPLETION_REFERENCE_20260915=[{"id":"2714","name":"Semel, Ben","pos
         </div>
       </div>
       <sc-if value="{{ hopActive }}" hint-placeholder-val="{{ false }}">
-        <div role="status" style="background:#FFD200;color:#1F3864;font-weight:800;font-size:12.5px;padding:7px 16px;display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap;text-align:center">
+        <div class="hasc-hop-banner" role="status" style="background:#FFD200;color:#1F3864;font-weight:800;font-size:12.5px;padding:7px 16px;display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap;text-align:center">
           <span>{{ hopBanner }}</span>
           <button onclick="{{ onHopReturn }}" style="border:1.5px solid #1F3864;border-radius:999px;background:#fff;color:#1F3864;font-weight:900;font-size:11.5px;padding:4px 11px;cursor:pointer">Return to my admin account</button>
         </div>
@@ -8381,7 +8383,7 @@ class Component extends DCLogic {
     // header still holds for the rest of that session (a page refresh keeps it) and is cleared
     // at the next sign-in or sign-out rather than being left for whoever sits down next.
     this.setTheme('light');
-    this.applyRoleDefaults(rk); this._publishSession(cu); this.logAudit('User login',{notes:rk+' portal'}); this.toast('Signed in as '+acct.name+'.'); }
+    this.applyRoleDefaults(rk); this._publishSession(cu); if(rk==='instructor'){ const _mine=(this.state.sessions||[]).filter(s=>this.instructorCanAccessSession(s,cu)); const _t=s=>{const d=this.sessionDateObj(s);return d?d.getTime():0;}; const _pick=_mine.filter(s=>this.isUpcomingSession(s)).sort((a,b)=>_t(a)-_t(b))[0]||_mine.slice().sort((a,b)=>_t(b)-_t(a))[0]; if(_pick) this.setState({instSession:_pick.id}); } this.logAudit('User login',{notes:rk+' portal'}); this.toast('Signed in as '+acct.name+'.'); }
   // Mirror the LMS principal into the centralized session. The rest of the app
   // keeps reading this.state.currentUser; new code reads HASCSession. Identity
   // is keyed on the STABLE staff/employee id, never the email address (§8).
@@ -10600,7 +10602,7 @@ class Component extends DCLogic {
   async downloadPreRestoreBackup(){ const pre=await this._loadPreRestoreBackup(); if(!pre||!pre.payload){ this.toast('No pre-restore backup is stored.'); return; } this._downloadJson(pre.payload,'hasc-lms-pre-restore-'+String(pre.savedAt||'').slice(0,10)+'.json'); }
   async undoLastRestore(){ if(this.state.role!=='admin'||this.state.hopOrigin){ this.toast('Administrator access is required for backup and restore.'); return; } const pre=await this._loadPreRestoreBackup(); if(!pre||!pre.payload){ this.toast('No pre-restore backup is stored.'); return; } const plan=this.backupRestorePlan(pre.payload); if(plan.error){ this.toast(plan.error); return; }
     if(typeof window!=='undefined'&&window.confirm&&!window.confirm('Return to the data as it was before the last restore (saved '+pre.savedAt+')?\n\n'+plan.lines.join('\n'))) return;
-    await this.applyBackupRestore(plan,'pre-restore backup ('+pre.savedAt+')'); }
+    const ok=await this.applyBackupRestore(plan,'pre-restore backup ('+pre.savedAt+')'); if(ok){ try{ await this._opsDelete('preRestoreBackup'); }catch(e){} this.__preRestoreChecked=true; this.setState({backupPreRestoreAt:'',backupMsg:'Returned to the data as it was before the last restore (saved '+pre.savedAt+'). '+plan.lines.join(' \u00b7 ')}); this.toast('Last restore undone.'); } }
   importCsvStaff(){ if(!this.can('import_staff')){ this.toast('Administrator access is required to import staff.'); return; } const lines=(this.state.csvText||'').trim().split('\n').filter(x=>x.trim()); const cols=['O1','O2','O3','EPP','ART','PA','CPR','FA','SCIP1','SCIP2','SCIPR','DYS','DIAB','DIABP','AMAP','AMAPP','CB','CBP','TF','TFP','DD','WCO','WCI','SDCH1','SDCH2','RNORI','RNPLAN','PONS']; const news=[]; const have=new Set(this.state.roster.map(r=>r.id)); lines.forEach(line=>{ const p=line.split(';').map(x=>x.trim()); if(p.length<2)return; const id=p[0],name=p[1]; if(!id||!name||have.has(id))return; have.add(id); const rec={}; cols.forEach(c=>rec[c]='w'); news.push({id,name,pos:p[2]||'',loc:p[3]||'',h:p[4]||'',mgrId:'',rec,dt:{}}); }); if(news.length){ let docs=this.state.docs; news.forEach(r=>{ docs=this.logStaffChange({staffId:r.id, name:r.name, pos:r.pos||'', loc:r.loc||'', h:r.h||'', mgrId:r.mgrId||'', action:'Created', source:'Manual action', notes:'Created by admin (pasted rows)'}, docs); }); this.saveDocs(docs); news.forEach(r=>this.logAudit('Staff added (manual)',{staff:r.name||r.id, next:'active', notes:'Pasted staff row', sev:'Info', relatedId:r.id})); this.setState(s=>({roster:[...s.roster,...news], csvText:'', recMsg:news.length+' staff added to the roster.'})); this.toast(news.length+' staff added.'); } else { this.setState({recMsg:'No new staff added \u2014 check the format or duplicate IDs.'}); } }
   saveDocs(docs){ const prev=this.state.docs; docs=this._normalizeDocs(docs); this.setState({docs}); const p=this._persistDocsNow(docs,true,prev); p.then(ok=>{if(ok){this.__docsUserWarned=false;return;}if(!this.__docsUserWarned){this.__docsUserWarned=true;this.toast('Storage warning: this change is active now but may not survive a reload. Check browser site-storage permissions.');}}); return p; }
   /* ===================== COURSE COMPLETION MANAGEMENT (admin-only void/recalc) =====================
