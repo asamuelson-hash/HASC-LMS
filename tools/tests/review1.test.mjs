@@ -37,6 +37,13 @@ const snap = (id, code) => ev(([id, code]) => { const L = window.__hascLogic; co
 { const r = await ev(() => { const L = window.__hascLogic; return ['Monday, January 5, 2026', 'Mon, Jan 5, 2026', 'Jan-5-2026', 'Mon Jan 05 2026 00:00:00 GMT-0500 (Eastern Standard Time)', '1/5/1945', '12/31/2099'].map(x => L.importDate(x)); });
   check('R1-08', 'importDate accepts long/weekday/JS-date forms; rejects unrepresentable years', JSON.stringify(r) === JSON.stringify(['1/5/26', '1/5/26', '1/5/26', '1/5/26', '', '']), r); }
 
+// IMP-04: HR "never expires" sentinel years become No expiration; computed expiries are not overrides
+{ const r = await ev(() => { const L = window.__hascLogic; const st = L._activeRosterMemo().find(s => L.requiredFor(s, 'CPR'));
+    const a = L.trainingImportBuildRow({ staffId: st.id, rawCode: 'CPR', rawDate: '9/1/2026', rawExp: '12/31/2099' }, new Set(), new Set());
+    const b = L.trainingImportBuildRow({ staffId: st.id, rawCode: 'CPR', rawDate: '9/2/2026' }, new Set(), new Set());
+    return { aExp: a.expires, aExplicit: a.expExplicit, bExplicit: b.expExplicit }; });
+  check('IMP-04', '12/31/2099 imports as No expiration; computed expiry not flagged explicit', r.aExp === 'No expiration' && r.aExplicit === true && r.bExplicit === false, r); }
+
 const errs = errors.filter(e => !/permissions policy|ERR_FAILED|net::ERR/.test(e)); check('ERRORS', 'no page errors', errs.length === 0, errs.slice(0, 5));
 await browser.close();
 let fail = 0; for (const r of results) { if (!r.ok) fail++; console.log((r.ok ? 'PASS ' : 'FAIL ') + r.id.padEnd(9) + r.name + (r.ok ? '' : '\n      ' + JSON.stringify(r.detail))); }
