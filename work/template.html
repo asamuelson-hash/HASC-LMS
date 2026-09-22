@@ -7424,7 +7424,7 @@ class Component extends DCLogic {
     const out=[],byCode=new Map();
     const add=(rec)=>{
       if(!rec)return; const code=String(rec.code||'').trim().toUpperCase(); if(!code)return; const x={...rec,code};
-      if(byCode.has(code)){ const cur=byCode.get(code); cur.sessionSelectable=!!(cur.sessionSelectable||x.sessionSelectable); cur.online=!!(cur.online||x.online); cur.certificateEligible=!!(cur.certificateEligible||x.certificateEligible); cur.complianceRequirement=!!(cur.complianceRequirement||x.complianceRequirement); cur.externalCertificateAllowed=!!(cur.externalCertificateAllowed||x.externalCertificateAllowed); cur.rnCourse=!!(cur.rnCourse||x.rnCourse); cur.allowIndependentCompletion=!!(cur.allowIndependentCompletion||x.allowIndependentCompletion); if(x.dynamic){ cur.dynamicSources=[...(cur.dynamicSources||[]),...(x.dynamicSources||[])]; if(x.requiredFor)cur.requiredFor=x.requiredFor; if(x.expiration)cur.expiration=x.expiration; if(x.delivery)cur.delivery=x.delivery; } return; }
+      if(byCode.has(code)){ const cur=byCode.get(code); cur.sessionSelectable=!!(cur.sessionSelectable||x.sessionSelectable); cur.online=!!(cur.online||x.online); cur.certificateEligible=!!(cur.certificateEligible||x.certificateEligible); cur.complianceRequirement=!!(cur.complianceRequirement||x.complianceRequirement); cur.externalCertificateAllowed=!!(cur.externalCertificateAllowed||x.externalCertificateAllowed); cur.rnCourse=!!(cur.rnCourse||x.rnCourse); cur.allowIndependentCompletion=!!(cur.allowIndependentCompletion||x.allowIndependentCompletion); if(x.dynamic){ cur.dynamicSources=[...(cur.dynamicSources||[]),...(x.dynamicSources||[])]; /* A library course mapped onto a BUILT-IN requirement is an extra delivery of it: it must never replace that requirement's renewal interval, audience or delivery (ADM-01). */ if(cur.source!=='built-in'){ if(x.requiredFor)cur.requiredFor=x.requiredFor; if(x.expiration)cur.expiration=x.expiration; if(x.delivery)cur.delivery=x.delivery; } } return; }
       byCode.set(code,x); out.push(x);
     };
     const baseCompliance=new Set(this.BASE_RPT_COMPLIANCE_CODES||[]),rnCodes=new Set(['RNORI','RNPLAN','PONS']),specializedOnly=new Set(['AMAP811','AMAPP','DIABP','CBP','TFP','RNORI','RNPLAN','PONS']);
@@ -7893,7 +7893,7 @@ class Component extends DCLogic {
   // "Annual 811 / pouring compliance follows the competency record, not the initial training alone."
   onSkillTrack(staff,code){ const on=(c)=>{ const r=staff&&staff.rec&&staff.rec[c]; const d=staff&&staff.dt&&staff.dt[c]; return (!!r&&r!=='w')||!!d; }; if(on(code)) return true; const PARENT={AMAPP:'AMAP',DIABP:'DIAB',CBP:'CB',TFP:'TF'}; if(PARENT[code]&&on(PARENT[code])) return true; const CHILD={AMAP:'AMAPP',DIAB:'DIABP',CB:'CBP',TF:'TFP'}; return CHILD[code]?on(CHILD[code]):false; }
   isDriverRole(staff){ return /\bdriver\b/i.test((staff&&staff.pos)||''); }
-  baseRequiredFor(staff,code){ const dyn=this.catalogCourseByCode(code); if(dyn&&dyn.dynamic&&dyn.complianceRequirement)return this.catalogAudienceMatches(dyn,staff); if((code==='O2'||code==='O3')&&this.hiredBefore2018(staff)) return false; const sdch=this.isSDCH(staff);
+  baseRequiredFor(staff,code){ const dyn=this.catalogCourseByCode(code); if(dyn&&dyn.dynamic&&dyn.complianceRequirement&&dyn.source!=='built-in')return this.catalogAudienceMatches(dyn,staff); if((code==='O2'||code==='O3')&&this.hiredBefore2018(staff)) return false; const sdch=this.isSDCH(staff);
     // ---- Self-Direction / Community Habilitation / Respite (SDCH) program rule ----
     // SDCH 1 & SDCH 2 are the required/displayed trainings. Orientation 1/2/3 are NOT required
     // by default (they render white/not-required and are excluded from the % denominator) and
@@ -7971,7 +7971,13 @@ class Component extends DCLogic {
   // Verified against the live roster (19 staff hired 1985-1999, 8 pre-2000 completions).
   // NOTE: correct through 2050; move to 4-digit/ISO storage before then.
   _yr(y){ y=+y; if(!isFinite(y)) return NaN; return y<100 ? (y>50 ? 1900+y : 2000+y) : y; }
-  parseMDY(s){ if(s instanceof Date) return isNaN(s)?null:s; if(!s) return null; const p=String(s).trim().split(/[\/\-]/); if(p.length<3) return null; let y=+p[2]; if(isNaN(y)||isNaN(+p[0])||isNaN(+p[1])) return null; y=this._yr(y); const d=new Date(y,(+p[0])-1,+p[1]); return isNaN(d)?null:d; }
+  // Strict: 2/30/26 or 13/5/26 are rejected instead of rolling into another real date.
+  // Accepts M/D/YY, M/D/YYYY, M-D-YYYY and ISO YYYY-MM-DD (read as a local calendar date).
+  parseMDY(s){ if(s instanceof Date) return isNaN(s)?null:s; if(!s) return null; const str=String(s).trim(); let p=str.split(/[\/\-]/); if(p.length<3) return null; if(/^\d{4}$/.test(p[0].trim())) p=[p[1],String(p[2]).trim().split(/[T\s]/)[0],p[0]]; const m=+p[0],dd=+p[1]; let y=+String(p[2]).trim().split(/\s/)[0]; if(isNaN(y)||isNaN(m)||isNaN(dd)) return null; y=this._yr(y); const d=new Date(y,m-1,dd); if(isNaN(d)||d.getMonth()!==m-1||d.getDate()!==dd) return null; return d; }
+  // One validation rule for every manually entered completion date. Dates are stored M/D/YY, so
+  // only 1951-2050 round-trips; anything else would silently become a different year.
+  completionDateError(d,label){ label=label||'The completion date'; d=(d instanceof Date)?d:this.parseMDY(d); if(!d) return label+' is not a valid month/day/year date.'; const y=d.getFullYear(); if(y<1951||y>2050) return label+' has an out-of-range year ('+y+').'; if(this.isFutureDate(d)) return label+' cannot be in the future.'; return ''; }
+  isFutureDate(d){ d=(d instanceof Date)?d:this.parseMDY(d); if(!d) return false; return new Date(d.getFullYear(),d.getMonth(),d.getDate()).getTime()>this._todayVal(); }
   formatMDY(d){ d=(d instanceof Date)?d:this.parseMDY(d); if(!d||isNaN(d)) return ''; return (d.getMonth()+1)+'/'+d.getDate()+'/'+String(d.getFullYear()).slice(2); }
   formatISODate(d){ d=(d instanceof Date)?d:this.parseMDY(d); if(!d||isNaN(d)) return ''; return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
   formatShortDate(d){ d=(d instanceof Date)?d:this.parseMDY(d); if(!d||isNaN(d)) return ''; return d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}); }
@@ -8021,7 +8027,29 @@ class Component extends DCLogic {
     // No ART completion yet: ignore hire date and imported red/yellow labels. The first ART clock
     // begins only after the applicable orientation pathway has a complete set of dated records.
     if(code==='ART'&&!dt) return this.artInitialStatus(staff);
-    if(iv&&dt){ const rs=this.statusFromDate(dt,iv); if(rs) l=rs; } if(l==='w'&&this.GRACE_COURSES.includes(code)){ const dh=this.daysSinceHire(staff); const gw=this.effGraceWindow(staff,code); return (dh!=null&&dh<=gw)?'y':'r'; } if(l==='w'&&(this.isNurse(staff)||this.isSDCH(staff))) l='r'; return l; }
+    if(iv&&dt){ const rs=this.statusFromDate(dt,iv); if(rs) l=rs; } if(l==='w'&&this.GRACE_COURSES.includes(code)){ const dh=this.daysSinceHire(staff); const gw=this.effGraceWindow(staff,code); return (dh!=null&&dh<=gw)?'y':'r'; } if(l==='w'&&(this.isNurse(staff)||this.isSDCH(staff))) l='r';
+    // A REQUIRED course with no qualifying record is never compliant: it is due by its initial due
+    // date (see initialDueInfo) and overdue after it. White is kept only for "not yet due".
+    if(l==='w'&&!dt&&this.missingRequiredEnforced()){ const x=this.initialDueInfo(staff,code); if(!x.due) return 'r'; const left=this.daysUntil(x.due); if(left==null||left<0) return 'r'; if(left<=30) return 'o'; if(left<=90) return 'y'; return 'w'; }
+    return l; }
+  // Admin-configurable (docs.complianceRules.missingRequired): 'enforce' (default) counts a required
+  // course with no record as due/overdue; 'legacy' restores the old behavior of leaving it white.
+  complianceRules(){ return (this.state&&this.state.docs&&this.state.docs.complianceRules)||{}; }
+  missingRequiredEnforced(){ return this.complianceRules().missingRequired!=='legacy'; }
+  // Pourings / annual competencies are first due one renewal interval after their parent training.
+  INITIAL_DUE_PARENT={AMAPP:'AMAP',DIABP:'DIAB',CBP:'CB',TFP:'TF',SCIPR:'SCIP2'};
+  // Initial due date for a required course that has never been completed. Deterministic and
+  // explainable: parent-training date + renewal interval for pourings / SCIP Recert, otherwise
+  // hire date + due window (location dueDays > Course Information initialDueDays > 90 days).
+  initialDueInfo(staff,code){
+    const parent=this.INITIAL_DUE_PARENT[code];
+    const pd=parent?(this.parseMDY(staff&&staff.dt&&staff.dt[parent])||(parent==='SCIP2'?this.parseMDY(staff&&staff.dt&&staff.dt.SCIP1):null)):null;
+    if(pd){ const iv=this.effInterval(staff,code)||365; const due=new Date(pd); due.setDate(due.getDate()+iv); return {due,anchor:pd,basis:'parent',parent,days:iv}; }
+    const h=this.parseMDY(staff&&staff.h); if(!h) return {due:null,anchor:null,basis:'none',days:0};
+    const ov=this.locOverrideFor(staff,code); const ci=this.courseInfoFor(code);
+    const days=(ov&&ov.dueDays)?+ov.dueDays:((+ci.initialDueDays>0)?+ci.initialDueDays:90);
+    const due=new Date(h); due.setDate(due.getDate()+days); return {due,anchor:h,basis:'hire',days};
+  }
 
   // ---- Orientation→SDCH equivalency helpers (shared by matrix tooltips, diagnostics & QA) ----
   // Returns the equivalency state for an SDCH/Com Hab/Respite staff member, or null for others.
@@ -9982,7 +10010,7 @@ class Component extends DCLogic {
     const st=this.staffById(id);if(!st){this.toast('Staff member not found.');return;}
     if(!this.state.pourFile){this.toast('Attach the accepted pouring form before recording this completion.');return;}
     const type=this.pouringType(this.state.pourType),raw=(this.state.pourDate||'').trim()||this.formatMDY(new Date()),pd=this.parseMDY(raw);
-    if(!pd){this.toast('Enter a valid accepted-pouring date.');return;}const date=this.formatMDY(pd);
+    if(!pd){this.toast('Enter a valid accepted-pouring date.');return;}{const _e=this.completionDateError(pd,'The pouring date');if(_e){this.toast(_e);return;}}const date=this.formatMDY(pd);
     const rnChoice=String(this.state.pourRn||'').trim(),rnCandidate=rnChoice&&rnChoice!=='__other__'?this.staffById(rnChoice):null,rnStaff=(rnCandidate&&this.isNurse(rnCandidate))?rnCandidate:null;
     const rn=(rnChoice==='__other__'?String(this.state.pourRnOther||'').trim():(rnStaff?this.dispName(rnStaff):''));
     if(!rnChoice){this.toast('Select the HASC RN who accepted the pouring, or choose Other.');return;}
@@ -10017,7 +10045,7 @@ class Component extends DCLogic {
     if(!this.isNurse(st)){this.toast('RN Courses may only be added to staff classified as nursing.');return;}
     if(!this.state.rnFile){this.toast('Attach the SLMS certificate or completion screenshot before recording this RN course.');return;}
     const type=this.rnCourseType(this.state.rnCourse),raw=(this.state.rnDate||'').trim()||this.formatMDY(new Date()),pd=this.parseMDY(raw);
-    if(!pd){this.toast('Enter a valid SLMS completion date.');return;}const date=this.formatMDY(pd),key=this.completionKey(id,type.code,date),voids=this.voidKeySet();
+    if(!pd){this.toast('Enter a valid SLMS completion date.');return;}{const _e=this.completionDateError(pd,'The SLMS completion date');if(_e){this.toast(_e);return;}}const date=this.formatMDY(pd),key=this.completionKey(id,type.code,date),voids=this.voidKeySet();
     if((this.state.docs.completions||[]).some(c=>String(c.staffId)===String(id)&&(c.complianceCode||c.code||c.course)===type.code&&c.date===date&&!voids.has(key))){this.toast('That RN course is already recorded for '+date+'.');return;}
     const now=this.formatMDY(new Date()),slms=(this.state.rnSlmsId||'').trim(),note=(this.state.rnNote||'').trim(),docId='id'+Date.now();
     const doc={id:docId,staffId:id,staffName:st.name,empId:id,docType:type.label,date,expires:'No expiration',fileName:this.state.rnFileName||'SLMS course certificate',dataUrl:this.state.rnFile,uploadedBy:(this.state.currentUser&&this.state.currentUser.name)||'Admin',when:now,visibility:'Admin + Manager + Staff',source:'SLMS RN course',note:[slms?('SLMS ID '+slms):'',note].filter(Boolean).join(' · '),archived:(this.state.docs.archived||[]).includes(id)};
@@ -10031,13 +10059,13 @@ class Component extends DCLogic {
   }
   recordExtCertDirect(){
     if(this.state.role!=='admin'){this.toast('Administrator access is required.');return;}
-    const id=this.state.admStaff;if(!id){this.toast('Select a staff member first.');return;}if(!this.state.xcFile){this.toast('Attach the certificate/document first.');return;}const tkey=this.state.xcCourse,t=this.extCertType(tkey),date=(this.state.xcDate||'').trim()||this.formatMDY(new Date()),exp=this.calculateExternalCertificateExpiration(tkey,date,this.state.xcExp);if(t.exp==='manual'&&!exp){this.toast('EMT Cards must include an expiration date.');return;}
+    const id=this.state.admStaff;if(!id){this.toast('Select a staff member first.');return;}if(!this.state.xcFile){this.toast('Attach the certificate/document first.');return;}const tkey=this.state.xcCourse,t=this.extCertType(tkey),rawXc=(this.state.xcDate||'').trim(),xcParsed=rawXc?this.parseMDY(rawXc):new Date();if(!xcParsed){this.toast('Enter a valid certificate date in month/day/year format.');return;}{const _e=this.completionDateError(xcParsed,'The certificate completion date');if(_e){this.toast(_e);return;}}const date=this.formatMDY(xcParsed),exp=this.calculateExternalCertificateExpiration(tkey,date,this.state.xcExp);if(t.exp==='manual'&&!exp){this.toast('EMT Cards must include an expiration date.');return;}
     const st=this.staffById(id),sat=t.satisfies,noExp=exp==='No expiration',file=this.state.xcFileName||'certificate';
     if((this.state.docs.extCerts||[]).some(x=>String(x.staffId)===String(id)&&x.course===tkey&&x.date===date&&x.fileName===file&&x.status==='approved')){this.toast('This exact certificate is already recorded for that staff member.');return;}
     const now=this.formatMDY(new Date()),ecId='ec'+Date.now(),satNote=sat.length>1?'Satisfies '+sat.map(c=>this.COURSE_NAME[c]||c).join(' and '):'',src='Admin direct external certificate';
     const ext={id:ecId,staffId:id,staffName:st?st.name:id,course:tkey,displayTitle:t.label,satisfiedRequirements:sat,date,expires:exp,fileName:file,dataUrl:this.state.xcFile,uploadedBy:'admin',when:now,status:'approved',approvedBy:(this.state.currentUser&&this.state.currentUser.name)||'Admin',source:src,note:[this.state.xcNote,satNote].filter(Boolean).join(' · ')};
-    const comp={id:'cm'+Date.now(),staffId:id,course:tkey,complianceCode:sat.join('+'),satisfiedRequirements:sat,displayCourseTitle:t.label,certificateTitle:t.label,date,expires:exp,note:ext.note,by:'admin',when:now,source:src,certId:ecId,certGenerated:true};
-    const docs={...this.state.docs,extCerts:[...(this.state.docs.extCerts||[]),ext],completions:[...(this.state.docs.completions||[]),comp]};let roster=this.state.roster.map(r=>{if(String(r.id)!==String(id))return r;const rec={...r.rec},dt={...r.dt},ovr={...(r.expOverride||{})};sat.forEach(c=>{rec[c]='g';dt[c]=date;if(!noExp&&exp)ovr[c]=exp;});return {...r,rec,dt,expOverride:ovr};});
+    const comp={id:'cm'+Date.now(),staffId:id,course:tkey,complianceCode:sat[0],satisfiedRequirements:sat,displayCourseTitle:t.label,certificateTitle:t.label,date,expires:exp,note:ext.note,by:'admin',when:now,source:src,certId:ecId,certGenerated:true};
+    const docs={...this.state.docs,extCerts:[...(this.state.docs.extCerts||[]),ext],completions:[...(this.state.docs.completions||[]),comp]};const roster=this.applyCompletionsToRoster(this.applyVoidsToRoster(this.state.roster,docs),docs);
     this.saveDocs(docs);this.setState({roster,xcFile:null,xcFileName:'',xcNote:'',xcExp:''});this._mirrorToService('extcert.add',S=>S.log({actor:'Admin',role:'admin',action:'External certificate added (admin direct)',entity:'external_certificates',entity_id:ecId,after:'approved',portal:'Admin',severity:'Compliance',staff:st?st.name:id}));this.logAudit('Admin direct external certificate uploaded',{staff:st?st.name:id,target:t.label,next:'approved · '+date+' · exp '+exp,notes:'Satisfies: '+sat.join(', '),sev:'Compliance',relatedId:ecId});this.toast(t.label+' recorded — posted to transcript & compliance.');
   }
   calcExpiry(code,date){ const days=this.catalogIntervalDays(code); if(!days) return 'No expiration'; const p=String(date||'').split('/'); if(p.length<3) return 'No expiration'; const yy=+p[2]; const d=new Date(this._yr(yy), +p[0]-1, +p[1]); if(isNaN(d)) return 'No expiration'; if(days%365===0){ d.setFullYear(d.getFullYear()+days/365); } else { d.setDate(d.getDate()+days); } return (d.getMonth()+1)+'/'+d.getDate()+'/'+String(d.getFullYear()).slice(2); }
@@ -10101,6 +10129,7 @@ class Component extends DCLogic {
     const sc=this.sessionCourse(this.state.compCourse),code=this.normalizeTrainingCode(sc.code,sc.label),title=sc.label,st=this.staffById(id);
     const rawDate=(this.state.compDate||'').trim()||this.formatMDY(new Date()),parsedDate=this.parseMDY(rawDate);
     if(!parsedDate){this.toast('Enter a valid completion date in month/day/year format.');return;}
+    {const _e=this.completionDateError(parsedDate);if(_e){this.toast(_e);return;}}
     const date=this.formatMDY(parsedDate),key=this.completionKey(id,code,date),voids=this.voidKeySet();
     if((this.state.docs.completions||[]).some(c=>String(c.staffId)===String(id)&&(c.complianceCode||c.code||c.course)===code&&c.date===date&&!voids.has(key))){this.toast('That staff member already has this course recorded for '+date+'.');return;}
     const note=(this.state.compNote||'').trim(),rule=this.independentCourseExpiryRule(this.state.compCourse,id),autoExp=this.independentExpirationFor(this.state.compCourse,date,id);
@@ -10114,10 +10143,9 @@ class Component extends DCLogic {
     const extra=[];if(this.state.compCertFile){const ecId='ec'+Date.now();extra.push({id:ecId,staffId:id,staffName:st?st.name:id,course:code,courseKey:sc.key,date,expires:exp,fileName:this.state.compCertName||'certificate',dataUrl:this.state.compCertFile,uploadedBy:'admin',when:now,status:'approved',approvedBy:(this.state.currentUser&&this.state.currentUser.name)||'Admin',source:'Independent session supporting document'});}
     const comp={id:'cm'+Date.now(),staffId:id,course:code,courseKey:sc.key,complianceCode:code,displayTitle:title,displayCourseTitle:title,date,expires:exp,expirationRule:rule.label,expOverride:isOverride,note,certGenerated:extra.length?true:this.issuesCertificate(code),certId:extra[0]?extra[0].id:null,by:this.state.role,when:now,source:extra.length?'Independent session supporting document':(note?'Add Independent Session':'Manual independent completion')};
     const docs={...this.state.docs,extCerts:[...(this.state.docs.extCerts||[]),...extra],completions:[...(this.state.docs.completions||[]),comp]};
-    let roster=this.applyCompletionsToRoster(this.state.roster,docs);
-    // Store the current completion's generated or manually approved expiration on the live staff
-    // record so every portal shows the same period immediately; no-expiration clears stale values.
-    roster=roster.map(r=>{if(String(r.id)!==String(id))return r;const eo={...(r.expOverride||{})};if(exp&&exp!=='No expiration'&&exp!=='—')eo[code]=exp;else delete eo[code];return {...r,expOverride:eo};});
+    // The replay decides the expiration: only the latest completion drives it, so backfilling an
+    // older record never lowers a current one. A manual override travels on the record (expOverride:true).
+    const roster=this.applyCompletionsToRoster(this.applyVoidsToRoster(this.state.roster,docs),docs);
     this.saveDocs(docs);this.setState({roster,compNote:'',compExp:'',compExpManual:false,compCertFile:null,compCertName:''});
     this._mirrorToService('completion.independent',S=>{S.upsertStaff({id,name:st?st.name:id});S.addIndependentCompletion({staffId:id,courseCode:code,courseKey:sc.key,completedAt:date,expiresAt:exp,note,locationName:st&&st.loc},'Admin');});
     this.logAudit('Independent session completion added',{staff:st?st.name:id,target:this.COURSE_NAME[code]||title,next:date+' · exp '+exp+(isOverride?' (manual override)':''),notes:'['+code+'] '+rule.label+' · '+(note||'Reason/source: Not provided'),sev:'Compliance',relatedId:code});if(isOverride)this.logAudit('Expiration manually overridden (independent session)',{staff:st?st.name:id,target:this.COURSE_NAME[code]||title,next:'exp '+exp,notes:note||rule.label,sev:'Critical',relatedId:code});this.toast(extra.length?'Completion + certificate recorded — expiration, transcript & compliance updated.':'Completion recorded — expiration, transcript, certificate and compliance views updated.');
@@ -10225,7 +10253,7 @@ class Component extends DCLogic {
   complianceExcludedSet(){ const s=this.systemAccountSet();
     ((this.state.docs&&this.state.docs.archived)||[]).forEach(id=>s.add(String(id)));
     return s; }
-  _cmpDeps(){ return [this.state.roster, this.state.locations, this.state.showArchived, (this.state.docs&&this.state.docs.archived), this.state.locReqProfiles, this.state.locReqVer, (this.state.docs&&this.state.docs.courseConfig), (this.state.docs&&this.state.docs.completions), (this.state.docs&&this.state.docs.completionVoids)]; }
+  _cmpDeps(){ return [this.state.roster, this.state.locations, this.state.showArchived, (this.state.docs&&this.state.docs.archived), this.state.locReqProfiles, this.state.locReqVer, (this.state.docs&&this.state.docs.courseConfig), (this.state.docs&&this.state.docs.completions), (this.state.docs&&this.state.docs.completionVoids), (this.state.docs&&this.state.docs.courseInfo), (this.state.docs&&this.state.docs.complianceRules), (this.state.docs&&this.state.docs.customCourses), this.state.onlineCourses, this.TODAY_MDY.join('/')]; }
   // Memoized active roster (stable reference between renders) — excludes archived & location-less
   // staff unless "show archived" is on. Mirrors the inline _activeRoster used across renderVals.
   // Canonical staff lookup. Backed by the String-keyed _rosterByIdMemo index,
@@ -10304,8 +10332,9 @@ class Component extends DCLogic {
       const team=this._filterStaff(locScoped,mSearch,'basic');
       const mgrCols=this._orderFor(team,artFirst).filter(c=>team.some(s=>this.requiredFor(s,c)||(s.dt&&s.dt[c])));
       const _m=this.buildComplianceMatrix(team.slice(0,repShow), mgrCols);
-      let totalCells=0, greenCells=0; team.forEach(r=>this.MATRIX_COLS.forEach(c=>{const l=ES(r,c); if(l==='r'){totalCells++;} else if(['g','y','o','w','info'].includes(l)){totalCells++;greenCells++;}}));
-      return { team, mgrCols, matrixHeads:mgrCols.map(c=>this.SHORT_NAME[c]||c), matrixRows:_m.rows, matrixError:_m.error, matrixFlagged:_m.flagged, totalCells, greenCells }; });
+      // Overdue / due-soon staff counts come from the same effStatus sweep as the % (never raw imported letters).
+      let totalCells=0, greenCells=0, redStaff=0, dueStaff=0; team.forEach(r=>{ let red=false,due=false; this.MATRIX_COLS.forEach(c=>{const l=ES(r,c); if(l==='r'){totalCells++;red=true;} else if(['g','y','o','w','info'].includes(l)){totalCells++;greenCells++; if(l==='o'||l==='y') due=true;}}); if(red) redStaff++; else if(due) dueStaff++; });
+      return { team, mgrCols, matrixHeads:mgrCols.map(c=>this.SHORT_NAME[c]||c), matrixRows:_m.rows, matrixError:_m.error, matrixFlagged:_m.flagged, totalCells, greenCells, redStaff, dueStaff }; });
   }
   // Shared column ordering (extracted from renderVals so the memoized views can reuse it).
   MATRIX_COLS=['SDCH1','SDCH2','O1','O2','O3','ART','EPP','PA','CPR','FA','SCIPR','AMAP','AMAPP','DYS','DIAB','DIABP','DD','CB','CBP','TF','TFP','WCO','WCI','RNORI','RNPLAN','PONS'];
@@ -10569,21 +10598,36 @@ class Component extends DCLogic {
   applyVoidsToRoster(roster, docs){
     const voids=(docs&&docs.completionVoids)||[]; if(!voids.length) return roster;
     const comps=(docs&&docs.completions)||[]; const voidedKeys=new Set(voids.map(v=>v.key));
+    const todayVal=this._todayVal();
+    const refById=this._completionReferenceIndex();
     return roster.map(st=>{
-      const codes=new Set(voids.filter(v=>v.staffId===st.id).map(v=>v.code)); if(!codes.size) return st;
-      const rec={...(st.rec||{})}, dt={...(st.dt||{})}, ovr={...(st.expOverride||{})};
+      const sid=String(st.id);
+      const codes=new Set(voids.filter(v=>String(v.staffId)===sid).map(v=>v.code)); if(!codes.size) return st;
+      const rec={...(st.rec||{})}, dt={...(st.dt||{})}, ovr={...(st.expOverride||{})}, baseDt={...(st.baseDt||{})};
+      let changed=false;
       codes.forEach(code=>{
         const curDate=dt[code]; if(!curDate) return;
-        if(!voidedKeys.has(this.completionKey(st.id, code, curDate))) return; // current driver not voided
-        const cand=comps.filter(c=>c.staffId===st.id && (c.complianceCode||c.code||c.course)===code && c.date && c.date!=='\u2014')
-          .filter(c=>!voidedKeys.has(this.completionKey(st.id, code, c.date)))
-          .sort((a,b)=>this.compDateVal(b.date)-this.compDateVal(a.date));
-        if(cand.length){ dt[code]=cand[0].date; rec[code]='g'; if(cand[0].expires&&cand[0].expires!=='No expiration') ovr[code]=cand[0].expires; else delete ovr[code]; }
-        else { delete dt[code]; rec[code]='w'; delete ovr[code]; }
+        if(!voidedKeys.has(this.completionKey(sid, code, curDate))) return; // current driver not voided
+        const curVal=this.compDateVal(curDate);
+        const ok=(d)=>d&&d!=='\u2014'&&!voidedKeys.has(this.completionKey(sid,code,d));
+        const cand=comps.filter(c=>c.referenceSuperseded!==true&&this.completionStaffId(c)===sid&&this.completionRosterCodes(c).some(x=>x.code===code))
+          .map(c=>this.completionDate(c)).filter(d=>ok(d)&&this.compDateVal(d)<=todayVal)
+          .sort((a,b)=>this.compDateVal(b)-this.compDateVal(a));
+        // History that was never a completion document (imported roster dates): the preserved
+        // baseDt, or the authoritative reference snapshot when it predates the voided record.
+        const refDate=(refById.get(sid)||{})[code];
+        const hist=[baseDt[code],refDate].filter(d=>ok(d)&&this.compDateVal(d)<curVal).sort((a,b)=>this.compDateVal(b)-this.compDateVal(a))[0]||'';
+        const best=[cand[0],hist].filter(Boolean).sort((a,b)=>this.compDateVal(b)-this.compDateVal(a))[0]||'';
+        changed=true;
+        delete ovr[code];
+        if(best){ dt[code]=best; rec[code]='g'; }
+        else { delete dt[code]; rec[code]='w'; }
       });
-      return {...st, rec, dt, expOverride:ovr};
+      return changed?{...st, rec, dt, expOverride:ovr, baseDt}:st;
     });
   }
+  // staffId -> {code: date} from the embedded Sept 15 authoritative completion report.
+  _completionReferenceIndex(){ if(this.__crIdx) return this.__crIdx; const m=new Map(); try{ (window.HASC_COMPLETION_REFERENCE_20260915||[]).forEach(r=>{ if(r&&r.id!=null) m.set(String(r.id),r.dt||{}); }); }catch(e){} this.__crIdx=m; return m; }
   effStatusLabel(st, code){ const l=this.effStatus(st, code); const map={g:'Compliant',y:'Due soon',o:'Due soon',r:'Missing / Expired',w:'Not on record',na:'Not required',info:'On record'}; return map[l]||l; }
   // ---- void modal ----
   openVoidModal(key){ const rec=this.buildCompletionRecords().find(r=>r.key===key); if(!rec){ this.toast('Completion not found.'); return; } this.setState({modal:{type:'void', rec, reason:'', ack:false}}); }
@@ -11275,7 +11319,7 @@ class Component extends DCLogic {
     const sid=String(d.staffId||'').trim(),rawCode=String(d.rawCode||'').trim(),rawTitle=String(d.rawTitle||'').trim(),rawDate=String(d.rawDate||'').trim(),rawExp=String(d.rawExp||'').trim(),notes=String(d.notes||'').trim(),src=String(d.source||'').trim();
     const st=(this.state.roster||[]).find(x=>String(x.id)===String(sid)),code=this.trainingImportResolveCode(rawCode,rawTitle,d.headerLabel),date=this.importDate(rawDate); let status='Ready',reason='Ready to import';
     const title=this.trainingImportDisplayTitle(rawTitle,code,d.headerLabel),legacy=code?this.isLegacyCourseCode(code,{displayCourseTitle:title}):false; let expires='';
-    if(!sid){status='Blocked';reason='Employee ID is missing.';} else if(!st){status='Blocked';reason='Employee ID was not found in the LMS roster.';} else if(!code){status='Blocked';reason='Course Code is missing or could not be resolved.';} else if(!date){status='Blocked';reason='Completion Date is invalid.';}
+    if(!sid){status='Blocked';reason='Employee ID is missing.';} else if(!st){status='Blocked';reason='Employee ID was not found in the LMS roster.';} else if(!code){status='Blocked';reason='Course Code is missing or could not be resolved.';} else if(!date){status='Blocked';reason='Completion Date is invalid.';} else if(this.isFutureDate(date)){status='Blocked';reason='Completion Date '+date+' is in the future.';}
     if(status==='Ready'){expires=this.trainingImportExpiration(rawExp,st,code,date,legacy);if(rawExp&&!expires){status='Blocked';reason='Expiration Date is invalid.';}}
     if(status==='Ready'){const key=this.completionKey(sid,code,date),rosterDup=!!(st&&st.dt&&String(st.dt[code]||'')===String(date));if(existing.has(key)||seenFile.has(key)||rosterDup){status='Duplicate';reason='This employee/course/date completion is already on record.';}else seenFile.add(key);}
     if(status==='Ready'&&legacy)reason='Will import as Legacy Course transcript history only.'; else if(status==='Ready'&&this.isComplianceCourse(code))reason='Will update transcript and current compliance.'; else if(status==='Ready')reason='Will import to transcript as professional development.';
@@ -11378,7 +11422,11 @@ class Component extends DCLogic {
     if(/^\d{5}(?:\.\d+)?$/.test(raw)){ const serial=Number(raw); if(serial>20000&&serial<90000){ const dt=new Date(Date.UTC(1899,11,30)+Math.floor(serial)*86400000); y=dt.getUTCFullYear();m=dt.getUTCMonth()+1;d=dt.getUTCDate(); } }
     if(!y && (hit=raw.match(/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})/))){ y=+hit[1];m=+hit[2];d=+hit[3]; }
     if(!y && (hit=raw.match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4}|\d{2})/))){ m=+hit[1];d=+hit[2];y=this._yr(+hit[3]); }
-    if(!y){ const dt=new Date(raw); if(!isNaN(dt)){ y=dt.getFullYear();m=dt.getMonth()+1;d=dt.getDate(); } }
+    // Month-name forms only ("Jan 5, 2026", "January 5 2026", "5-Jan-2026", "5 January 2026"). The old
+    // lenient new Date(raw) fallback invented dates from status text, scores and bare years (IMP-01/02/03).
+    if(!y){ const MON={jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,sept:9,oct:10,nov:11,dec:12}; const mk=w=>MON[String(w).toLowerCase().slice(0,String(w).toLowerCase().startsWith('sept')?4:3)];
+      if((hit=raw.match(/^([A-Za-z]{3,9})\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})(?:\b|$)/))&&mk(hit[1])){ m=mk(hit[1]);d=+hit[2];y=+hit[3]; }
+      else if((hit=raw.match(/^(\d{1,2})[-\s]([A-Za-z]{3,9})\.?[-\s,]+(\d{4}|\d{2})(?:\b|$)/))&&mk(hit[2])){ d=+hit[1];m=mk(hit[2]);y=this._yr(+hit[3]); } }
     if(!y||m<1||m>12||d<1||d>31)return ''; const chk=new Date(y,m-1,d); if(chk.getFullYear()!==y||chk.getMonth()!==m-1||chk.getDate()!==d)return '';
     return m+'/'+d+'/'+String(y).slice(-2);
   }
@@ -11768,9 +11816,10 @@ class Component extends DCLogic {
     if(this.state.role!=='admin'){this.toast('Administrator access is required.');return;}
     const d=(this.state.docs.extCerts||[]).find(x=>x.id===id);if(!d)return;const existing=(this.state.docs.completions||[]).find(c=>c.certId===id);if(d.status==='approved'&&existing){this.toast('This certificate was already approved and posted.');return;}
     const date=(d.date&&d.date!=='—')?d.date:this.formatMDY(new Date()),t=this.extCertType(d.course),sat=(d.satisfiedRequirements&&d.satisfiedRequirements.length)?d.satisfiedRequirements:t.satisfies,exp=d.expires||this.xcSuggestExp(d.course,date),noExp=exp==='No expiration'||!exp,now=this.formatMDY(new Date());
-    const comp=existing||{id:'cm'+Date.now(),staffId:d.staffId,course:d.course,complianceCode:sat.join('+'),satisfiedRequirements:sat,displayCourseTitle:t.label,certificateTitle:t.label,date,expires:exp,by:'admin',when:now,source:'External certificate (approved)',certId:id,certGenerated:true};
+    const dParsed=this.parseMDY(date);if(!dParsed){this.toast('This certificate has an invalid completion date ('+date+'). Correct it before approving.');return;}{const _e=this.completionDateError(dParsed,'This certificate\'s completion date ('+date+')');if(_e){this.toast(_e+' Correct it before approving.');return;}}
+    const comp=existing||{id:'cm'+Date.now(),staffId:d.staffId,course:d.course,complianceCode:sat[0],satisfiedRequirements:sat,displayCourseTitle:t.label,certificateTitle:t.label,date,expires:exp,by:'admin',when:now,source:'External certificate (approved)',certId:id,certGenerated:true};
     const upd={...this.state.docs,extCerts:this.state.docs.extCerts.map(x=>x.id===id?{...x,status:'approved',approvedBy:(this.state.currentUser&&this.state.currentUser.name)||'Admin',date,expires:exp,satisfiedRequirements:sat}:x),completions:existing?(this.state.docs.completions||[]):[...(this.state.docs.completions||[]),comp]};
-    const roster=this.state.roster.map(r=>{if(String(r.id)!==String(d.staffId))return r;const rec={...r.rec},dt={...r.dt},ovr={...(r.expOverride||{})};sat.forEach(c=>{rec[c]='g';dt[c]=date;if(!noExp)ovr[c]=exp;});return {...r,rec,dt,expOverride:ovr};});
+    const roster=this.applyCompletionsToRoster(this.applyVoidsToRoster(this.state.roster,upd),upd);
     this.saveDocs(upd);this.setState({roster});this._mirrorToService('extcert.approve',S=>S.log({actor:(this.state.currentUser&&this.state.currentUser.name)||'Admin',role:'admin',action:'External certificate approved',entity:'external_certificates',entity_id:id,after:'approved',portal:'Admin',severity:'Compliance',staff:d.staffName}));this.logAudit('External certificate approved',{staff:d.staffName,target:t.label,prev:d.status||'pending',next:'approved · '+date,notes:'Satisfies: '+sat.join(', '),sev:'Compliance',relatedId:id});this.toast('Approved — completion posted to transcript and compliance updated.');
   }
   extDispLabel(d){ if(!d) return ''; return d.displayTitle || (this.extCertType(d.course)||{}).label || this.COURSE_NAME[d.course] || d.course; }
@@ -14192,20 +14241,60 @@ class Component extends DCLogic {
   // AMAP Pouring (AMAPP) is a SEPARATE row driven by Form 811 receipt - see recordPouring().
   COMPLETION_SATISFIES={ AMAP2:['AMAP'] };
   completionSatisfies(code){ return this.COMPLETION_SATISFIES[code]||[]; }
+  // Every roster code a completion drives: each satisfied requirement (an EMT card satisfies CPR
+  // and FA), legacy compound codes stored as "CPR+FA" split apart, then COMPLETION_SATISFIES
+  // alternates. Returned as [{code, via}] where `via` is the primary code an alternate came from,
+  // so voiding the primary also voids what it satisfied.
+  completionRosterCodes(c){
+    if(!c) return [];
+    const sats=(c.satisfiedRequirements||c.satisfied_requirements||[]).map(v=>String(v||'').trim().toUpperCase()).filter(Boolean);
+    const base=sats.length?sats:String(this.completionComplianceCode(c)||'').split('+').map(v=>v.trim()).filter(Boolean);
+    const out=[],seen=new Set();
+    base.forEach(k=>{ if(!seen.has(k)){seen.add(k);out.push({code:k,via:k});} this.completionSatisfies(k).forEach(a=>{ if(!seen.has(a)){seen.add(a);out.push({code:a,via:k});} }); });
+    return out;
+  }
+  // An expiration only travels with a completion when a person entered it or it is printed on the
+  // document (manual override, external card, imported expiry). Auto-computed dates are stamped
+  // expOverride:false and are NOT overrides: the current renewal rule decides, so status and the
+  // displayed expiration always come from the same rule.
+  completionExplicitExpiry(c){ if(!c||c.expOverride===false) return ''; const e=String(this.completionExpires(c)||'').trim(); return (e&&e!=='\u2014')?e:''; }
+  _todayVal(){ const t=this.todayDate(); return new Date(t.getFullYear(),t.getMonth(),t.getDate()).getTime(); }
+  // Merge persisted completion records into the LIVE roster. This is the single authoritative
+  // completion -> compliance path: every write path (independent session, external certificate,
+  // session certification, import, void, boot/cross-tab hydrate) rebuilds through it.
+  //  - Latest non-voided completion date wins per (staff, code); an older completion never
+  //    lowers a newer one.
+  //  - The winning completion alone decides the expiration override: explicit expiry -> override,
+  //    otherwise the override is cleared and the renewal interval applies.
+  //  - Completions dated after today are held (not counted) until their date arrives.
+  //  - A roster-only (imported) date that a completion supersedes is kept in baseDt so voiding
+  //    the newer completion falls back to it instead of erasing the history.
   applyCompletionsToRoster(roster, docs){
     const comps=(docs&&docs.completions)||[]; if(!comps.length) return roster;
     const vk=new Set(((docs&&docs.completionVoids)||[]).map(v=>v.key));
+    const todayVal=this._todayVal();
     const byStaff={};
-    comps.forEach(x=>{ if(x.referenceSuperseded===true) return; const sid=this.completionStaffId(x),isNewVideo=!!this.completionVideoId(x),code=this.completionComplianceCode(x),date=this.completionDate(x),explicitNonCompliance=(x.countsTowardCompliance===false||x.counts_toward_compliance===false); if(explicitNonCompliance)return; if(isNewVideo && !(this.completionCountsTowardCompliance(x)&&code)) return; if(!code||!date||date==='—'||!sid)return;
+    comps.forEach(x=>{ if(x.referenceSuperseded===true) return; const sid=this.completionStaffId(x),isNewVideo=!!this.completionVideoId(x),code=this.completionComplianceCode(x),date=this.completionDate(x),explicitNonCompliance=(x.countsTowardCompliance===false||x.counts_toward_compliance===false); if(explicitNonCompliance)return; if(isNewVideo && !(this.completionCountsTowardCompliance(x)&&code)) return; if(!code||!date||date==='\u2014'||!sid)return;
       if(vk.has(this.completionKey(sid,code,date))) return;
-      (byStaff[sid]=byStaff[sid]||[]).push({code,date,expires:this.completionExpires(x)});
-      this.completionSatisfies(code).forEach(alt=>{ if(vk.has(this.completionKey(sid,alt,date)))return; (byStaff[sid]=byStaff[sid]||[]).push({code:alt,date,expires:''}); }); });
+      const dv=this.compDateVal(date); if(!dv||dv>todayVal) return;
+      const expires=this.completionExplicitExpiry(x);
+      this.completionRosterCodes(x).forEach(({code:k,via})=>{ if(vk.has(this.completionKey(sid,k,date))||(via!==k&&vk.has(this.completionKey(sid,via,date)))) return; (byStaff[sid]=byStaff[sid]||[]).push({code:k,date,expires:via===k?expires:''}); }); });
     if(!Object.keys(byStaff).length) return roster;
     return roster.map(r=>{ const list=byStaff[String(r.id)]; if(!list) return r;
-      const rec={...(r.rec||{})},dt={...(r.dt||{})},expOverride={...(r.expOverride||{})};let changed=false;
+      const rec={...(r.rec||{})},dt={...(r.dt||{})},expOverride={...(r.expOverride||{})},baseDt={...(r.baseDt||{})};let changed=false;
+      const own=new Set(list.map(x=>x.code+'|'+x.date));
       list.slice().sort((a,b)=>this.compDateVal(a.date)-this.compDateVal(b.date)).forEach(x=>{const nv=this.compDateVal(x.date),cv=this.compDateVal(dt[x.code]);
-        if(!dt[x.code]||(nv&&nv>=cv)){if(dt[x.code]!==x.date||rec[x.code]!=='g')changed=true;dt[x.code]=x.date;rec[x.code]='g';if(x.expires&&x.expires!=='No expiration'&&x.expires!=='—'){if(expOverride[x.code]!==x.expires)changed=true;expOverride[x.code]=x.expires;}else if(x.expires==='No expiration'&&expOverride[x.code]){delete expOverride[x.code];changed=true;}}});
-      return changed?{...r,rec,dt,expOverride}:r; });
+        if(!dt[x.code]||(nv&&nv>=cv)){
+          const prev=dt[x.code];
+          if(prev&&prev!==x.date&&!own.has(x.code+'|'+prev)&&this.compDateVal(prev)>this.compDateVal(baseDt[x.code])){baseDt[x.code]=prev;changed=true;}
+          if(prev!==x.date||rec[x.code]!=='g')changed=true;dt[x.code]=x.date;rec[x.code]='g';
+          if(x.expires&&x.expires!=='No expiration'){if(expOverride[x.code]!==x.expires){expOverride[x.code]=x.expires;changed=true;}}
+          else if(expOverride[x.code]!=null){delete expOverride[x.code];changed=true;}
+        }});
+      // An override is only valid while the completion that carried it is the one driving the
+      // date. If an older/roster date still drives it, drop the stray override.
+      Object.keys(expOverride).forEach(code=>{ if(dt[code]&&own.has(code+'|'+dt[code])) return; if(list.some(x=>x.code===code)){delete expOverride[code];changed=true;} });
+      return changed?{...r,rec,dt,expOverride,baseDt}:r; });
   }
   buildTranscript(stIn){
     if(!stIn) return [];
@@ -14456,7 +14545,9 @@ class Component extends DCLogic {
     const docs={...this.state.docs,completions:[...(this.state.docs.completions||[]),...newComps]};
     const requests=(this.state.requests||[]).map(r=>{if(r.sessionId!==sid)return r;const id=String(r.staffId);let status=r.status;if(passers.includes(id))status='completed';else if(noShow.includes(id))status='no_show';else if(failed.includes(id))status='failed';return {...r,status,updatedAt:new Date().toISOString()};});
     const sessions=this.state.sessions.map(se=>se.id===sid?{...se,certified:true,locked:true,status:'certified',certified_at:new Date().toISOString(),certified_by:(this.state.currentUser&&this.state.currentUser.name)||'Instructor',roster:(se.roster||[]).map(x=>{const id=String(x.staffId);return {...x,result:passers.includes(id)?'completed':(noShow.includes(id)?'no_show':(failed.includes(id)?'failed':x.result))};})}:se);
-    const rosterState=this.state.roster.map(r=>passers.includes(String(r.id))?{...r,rec:{...r.rec,[code]:'g'},dt:{...r.dt,[code]:dshort}}:r);
+    // Same replay as every other path: clears a stale expiration override and never moves a newer
+    // completion date backwards when an older session is finalized late.
+    const rosterState=this.applyCompletionsToRoster(this.applyVoidsToRoster(this.state.roster,docs),docs);
     this.saveDocs(docs); this.setState({sessions,requests,roster:rosterState});
     this._mirrorToService('cert.finalize',S=>{S.upsertSession({id:sid,code,title,date:sess.date,when:sess.when,where:sess.where,capacity:Number(sess.capacity)||0,status:'open'});roster.forEach(x=>{const id=String(x.staffId),a=(sess.att||{})[x.staffId],p=(sess.pass||{})[x.staffId];S.upsertStaff({id,name:(this.staffById(id)||{}).name});S.setAttendance(sid,id,a!=='absent',a==='absent'?'absent':(p?'pass':'fail'),(this.state.currentUser&&this.state.currentUser.name)||'Instructor');});S.finalizeCertification(sid,(this.state.currentUser&&this.state.currentUser.name)||'Instructor',{expiresAt:null});});
     passers.forEach(id=>this.logTrainingEvent('complete',title,code,id,{}));
@@ -14518,9 +14609,9 @@ class Component extends DCLogic {
   setTheme(t){ const v=['light','dark'].includes(t)?t:'light'; try{ localStorage.setItem('hasc_lms_theme_v2', v); }catch(e){} this.applyBodyTheme(v); this.setState({theme:v}); }
   applyBodyTheme(v){ try{ const b=document.body; if(!b) return; b.classList.remove('hasc-dark','hasc-hasc'); if(v==='dark') b.classList.add('hasc-dark'); }catch(e){} }
 
-  staffStatus(r){ // worst status letter for a roster staff
-    const order=['r','o','y','g','w']; let worst='g';
-    Object.values(r.rec).forEach(l=>{ if(l==='r')worst='r'; else if(l==='o'&&worst!=='r')worst='o'; else if(l==='y'&&worst!=='r'&&worst!=='o')worst='y'; });
+  staffStatus(r){ // worst EFFECTIVE status letter for a roster staff (same engine as every % and matrix)
+    const row=this._complianceGrid().byId[String(r&&r.id)]; let worst='g';
+    this.MATRIX_COLS.forEach(c=>{ const l=row?row[c]:this.effStatus(r,c); if(l==='r')worst='r'; else if(l==='o'&&worst!=='r')worst='o'; else if(l==='y'&&worst!=='r'&&worst!=='o')worst='y'; });
     return worst;
   }
 
@@ -15544,17 +15635,18 @@ class Component extends DCLogic {
     // (see _mgrMatrixView). Debounced typing keeps the *applied* mSearch stable, so each keystroke is
     // a cache hit and the matrix never rebuilds mid-type. Non-manager roles skip the matrix entirely.
     let team, mgrCols, matrixHeads, matrixRows, matrixError, matrixFlagged, totalCells=0, greenCells=0;
+    let _mvRed=0,_mvDue=0;
     if(_mgrOverviewTab){
       const _mv=this._mgrMatrixView((cu&&cu.empId)||'mgr', _allRoster, this.state.mLoc, this.state.mSearch, this.state.repShow, _artFirst);
-      team=_mv.team; mgrCols=_mv.mgrCols; matrixHeads=_mv.matrixHeads; matrixRows=_mv.matrixRows; matrixError=_mv.matrixError; matrixFlagged=_mv.matrixFlagged; totalCells=_mv.totalCells; greenCells=_mv.greenCells;
+      team=_mv.team; mgrCols=_mv.mgrCols; matrixHeads=_mv.matrixHeads; matrixRows=_mv.matrixRows; matrixError=_mv.matrixError; matrixFlagged=_mv.matrixFlagged; totalCells=_mv.totalCells; greenCells=_mv.greenCells; _mvRed=_mv.redStaff; _mvDue=_mv.dueStaff;
     } else {
       team=[]; mgrCols=[]; matrixHeads=[]; matrixRows=[]; matrixError=null; matrixFlagged=0;
     }
     const matrixEmpty=team.length===0; const matrixHasRows=!matrixError && matrixRows.length>0;
     const mTeamCountLabel=team.length+' staff'+(team.length>this.state.repShow?(' (showing first '+this.state.repShow+')'):'');
     const mTeamSize=team.length;
-    const mRed=team.filter(r=>Object.values(r.rec).includes('r')).length;
-    const mDueSoon=team.filter(r=>{const v=Object.values(r.rec);return !v.includes('r')&&(v.includes('o')||v.includes('y'));}).length;
+    const mRed=_mvRed;
+    const mDueSoon=_mvDue;
     const mPct=totalCells?Math.round(greenCells/totalCells*100):0;
     const _isAdmin=role==='admin',_adminApprovalsTab=_isAdmin&&tab==='approvals',_adminDashTab=_isAdmin&&tab==='dash';
     const _needsReqView=_mgrReqTab||_adminApprovalsTab||_adminDashTab; const _reqRosterById=Object.create(null),_reqSessionById=Object.create(null); if(_needsReqView){this.state.roster.forEach(x=>{_reqRosterById[String(x.id)]=x;});this.state.sessions.forEach(x=>{_reqSessionById[String(x.id)]=x;});}
@@ -15598,7 +15690,7 @@ class Component extends DCLogic {
     const regBase0 = _registerTab?(this.state.regLoc ? scopedRoster.filter(r=>this.canonicalLocName(r)===this.state.regLoc) : scopedRoster):[];
     const regBase = _registerTab?this._filterStaff(regBase0,this.state.regSearch,'basic'):[];
     const _regRowH=56,_regWindow=30,_regMaxStart=Math.max(0,regBase.length-1),_regStart=Math.min(Math.max(0,this.state.regWindowStart||0),_regMaxStart),_regEnd=Math.min(regBase.length,_regStart+_regWindow);
-    const mRegStaff=regBase.slice(_regStart,_regEnd).map(r=>({id:r.id,name:r.name,pos:r.pos,statusNote:(mRegSessObj&&(r.rec[mRegSessObj.code]==='r'||r.rec[mRegSessObj.code]==='o'||r.rec[mRegSessObj.code]==='y'))?'Needs this training':'Optional refresh',
+    const mRegStaff=regBase.slice(_regStart,_regEnd).map(r=>({id:r.id,name:r.name,pos:r.pos,statusNote:(mRegSessObj&&(()=>{const _c=this.normalizeTrainingCode(mRegSessObj.code,mRegSessObj.title),_l=this.requiredFor(r,_c)?this.effStatus(r,_c):'na';return _l==='r'||_l==='o'||_l==='y';})())?'Needs this training':'Optional refresh',
       checked:!!this.state.mRegSel[r.id], onToggle:()=>this.setState(s=>({mRegSel:{...s.mRegSel,[r.id]:!s.mRegSel[r.id]}}))}));
     const regPadTopStyle='height:'+(_regStart*_regRowH)+'px',regPadBottomStyle='height:'+Math.max(0,(regBase.length-_regEnd)*_regRowH)+'px';
     const regCountLabel=regBase.length.toLocaleString()+' staff';
@@ -16874,17 +16966,24 @@ onCiUseStd:()=>this.setState({ciDesc:this.courseSheetSummaryDefault(this.state.c
       else if(_eq.full) sdchEquivText='Satisfied by full Orientation equivalency: Orientation 1 + Orientation 2 + Orientation 3 all completed → '+code+' counts as green (no SDCH record required).';
       else if(_eq.any) sdchEquivText='Orientation equivalency incomplete ('+_eq.count+' of 3 completed). All three of Orientation 1, 2, and 3 are required to satisfy '+code+' by equivalency.';
       else sdchEquivText='No Orientation equivalency yet — neither direct '+code+' nor a full Orientation 1/2/3 set is on record.'; }
-    const dt=(staff.dt&&staff.dt[code])||''; const colorMap={g:'Green \u2014 up to date',y:'Yellow \u2014 due soon (\u226490 days)',o:'Orange \u2014 due very soon (\u226430 days)',r:'Red \u2014 overdue / missing',w:'White \u2014 compliant; not yet required / not required / N/A',na:'Grey \u2014 not applicable to this person',info:'White \u2014 completed; not a current requirement'};
+    const dt=(staff.dt&&staff.dt[code])||''; const colorMap={g:'Green \u2014 up to date',y:'Yellow \u2014 due soon (\u226490 days)',o:'Orange \u2014 due very soon (\u226430 days)',r:'Red \u2014 overdue / missing',w:'White \u2014 not yet due / not required',na:'Grey \u2014 not applicable to this person',info:'White \u2014 completed; not a current requirement'};
     let why='';
     if(!eff){ why= (profOv&&profOv.req==='remove'&&(!profOv.buckets||!profOv.buckets.length||profOv.buckets.some(b=>this.staffInBucket(staff,b))))? 'A location override marks this course Not Required for this person — historical completions are preserved, but it is excluded from their compliance.' : (optionalTrack? 'Optional skill/medication/transport track and this person is not on it (no record/completion) and is not a driver, so it is not required.' : 'Not required for this role/category under the HASC global rules.'); }
     else { if(status==='g') why='Required, and a valid current completion is on record'+(dt?(' ('+dt+')'):'')+'.'; else if(code==='ART'&&!dt&&(status==='y'||status==='o')) why='Initial ART is approaching its due date of '+(artDue&&artDue.ready?this.formatShortDate(artDue.dueDate):'—')+', one year after '+(artDue&&artDue.pathway||'the applicable orientation pathway')+' was completed.'; else if(code==='ART'&&!dt&&status==='r') why='Initial ART is overdue. It became due '+(artDue&&artDue.ready?this.formatShortDate(artDue.dueDate):'—')+', one year after the applicable orientation pathway was completed.'; else if(code==='ART'&&!dt&&status==='w') why=(artDue&&artDue.ready)?('ART is not yet due. Initial due date: '+this.formatShortDate(artDue.dueDate)+' (one year after '+artDue.pathway+').'):'ART is not yet due because the applicable orientation pathway is not fully completed with dated records.'; else if(status==='y'||status==='o') why='Required; the completion'+(dt?(' from '+dt):'')+' is approaching its renewal cycle.'; else if(status==='r') why= dt?('Required; the last completion ('+dt+') is past its renewal cycle.') : 'Required and no completion on record (past the new-hire/grace window).'; else if(status==='w') why='Compliant at present: the course is not yet due, is within an allowed new-hire window, or is not required / applicable.'; else if(status==='info') why='Not a current requirement for this person, but a completion exists on record.'; else why='Not applicable to this person.'; }
+    let initDue=null;
+    if(eff&&!dt&&code!=='ART'&&!inGrace&&status!=='g'&&status!=='na'&&this.missingRequiredEnforced()){ initDue=this.initialDueInfo(staff,code);
+      const dueStr=initDue.due?this.formatShortDate(initDue.due):'';
+      const basis=initDue.basis==='parent'?(initDue.days+' days after '+this.courseLabel(initDue.parent)+' ('+this.formatMDY(initDue.anchor)+')'):(initDue.basis==='hire'?(initDue.days+' days after hire ('+this.formatMDY(initDue.anchor)+')'):'');
+      why= !initDue.due ? 'Required, and no completion is on record. No hire date or prerequisite date is available to set an initial due date, so it counts as missing.'
+        : (status==='r' ? ('Required, and no completion is on record. The initial due date was '+dueStr+' \u2014 '+basis+'.') : ('Required, and not yet completed. Initial due date '+dueStr+' \u2014 '+basis+'.'));
+    }
     return { code, courseName:this.courseLabel(code), staffName:staff.name||'(staff)', staffPos:staff.pos||'\u2014', staffLoc:this.canonicalLocName(staff), pathway,
       globalText: base?'Required by global rule':'Not required by global rule', globalBg:base?'#E4F6EB':'#F1F3F8', globalFg:base?'#1F8A4C':'#667085',
       programText: optionalTrack? ('Optional track \u2014 '+(onTrack?'staff IS on this track':'staff not on this track')) : (pathway),
       overrideText: ovText, overrideMatch: ovMatch, hasOverride:!!profOv,
       sdchEquivText, showSdchEquiv,
       categoryText: buckets.length?buckets.join(', '):'No special category', effectiveText: eff?'REQUIRED':'NOT REQUIRED', effectiveBg: eff?'#1F3864':'#EEF1F8', effectiveFg: eff?'#fff':'#46557a',
-      dueText: code==='ART' ? (dt?'Renewal is based on the ART completion date':((artDue&&artDue.ready)?('Initial due '+this.formatShortDate(artDue.dueDate)+' — one year after '+artDue.pathway+' completion'):'Not due until the applicable orientation pathway is fully completed and dated')) : (inGrace? ('Within '+grace+' days of hire (new-hire grace window)') : 'No new-hire grace window'), expText: expLabel,
+      dueText: code==='ART' ? (dt?'Renewal is based on the ART completion date':((artDue&&artDue.ready)?('Initial due '+this.formatShortDate(artDue.dueDate)+' — one year after '+artDue.pathway+' completion'):'Not due until the applicable orientation pathway is fully completed and dated')) : (inGrace? ('Within '+grace+' days of hire (new-hire grace window)') : (initDue&&initDue.due?('Initial due '+this.formatShortDate(initDue.due)+(initDue.basis==='parent'?(' \u2014 '+initDue.days+' days after '+this.courseLabel(initDue.parent)):(' \u2014 '+initDue.days+' days after hire'))):'No new-hire grace window')), expText: expLabel,
       statusLetter:status, statusLabel:(colorMap[status]||status), statusChip:this.cellColor(status), why, completion: dt||'\u2014' };
   }
   // History entries (from the immutable audit log) for one location's requirement changes.
