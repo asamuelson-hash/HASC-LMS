@@ -1725,6 +1725,26 @@ window.HASC_COMPLETION_REFERENCE_20260915=[{"id":"2714","name":"Semel, Ben","pos
       .hasc-main-content table{font-size:12.5px}
       .hasc-import-preview-dialog{box-shadow:none!important}
     }
+
+    /* UX-11 phones: every tab reachable without sideways scrolling, a compact header, and the
+       instructor's Pass/Fail and the transcript's status/expiry visible on a 390px screen. */
+    @media screen and (max-width:760px){
+      .hasc-nav-inner,.hasc-nav-groups{flex-wrap:wrap!important;overflow-x:visible!important;row-gap:6px!important}
+      .hasc-nav-inner > button,.hasc-nav-groups > button{min-height:38px!important;padding-inline:12px!important;font-size:12.5px!important}
+      .hasc-theme-label{display:none!important}
+      .hasc-theme-switch button{padding:5px 9px!important;font-size:11px!important}
+      .hasc-user-summary > div:not(:first-child){display:none!important}
+      .hasc-user-summary{flex:1 1 120px!important}
+      .hasc-inst-att thead{display:none}
+      .hasc-inst-att,.hasc-inst-att tbody,.hasc-inst-att tr{display:block!important;width:100%!important}
+      .hasc-inst-att tr{border-bottom:1px solid #EDF1F7;padding:8px 0}
+      .hasc-inst-att td{display:block!important;border:none!important;padding:5px 12px!important;text-align:left!important}
+      .hasc-inst-att td:nth-child(2){display:none!important}
+      .hasc-inst-att td:nth-child(3)::before{content:'Attendance';display:block;font-size:10.5px;font-weight:800;color:#667085;text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px}
+      .hasc-inst-att td:nth-child(4)::before{content:'Result';display:block;font-size:10.5px;font-weight:800;color:#667085;text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px}
+      .hasc-staff-trx th:nth-child(2),.hasc-staff-trx td:nth-child(2){display:none!important}
+      .hasc-staff-trx th,.hasc-staff-trx td{padding:8px 7px!important;font-size:12px!important}
+    }
     @media screen and (max-width:430px){
       .hasc-header-actions{gap:7px!important}
       .hasc-user-summary{font-size:12px}
@@ -1884,8 +1904,8 @@ window.HASC_COMPLETION_REFERENCE_20260915=[{"id":"2714","name":"Semel, Ben","pos
           </div>
           </sc-if>
           <!-- THEME SWITCHER (UI only) -->
-          <div style="display:flex;align-items:center;gap:6px">
-            <span style="color:#fff;opacity:.72;font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.05em">Theme</span>
+          <div class="hasc-theme-switch" style="display:flex;align-items:center;gap:6px">
+            <span class="hasc-theme-label" style="color:#fff;opacity:.72;font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.05em">Theme</span>
             <div style="display:flex;gap:3px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.22);border-radius:999px;padding:3px">
               <sc-for list="{{ themeOpts }}" as="t" hint-placeholder-count="3">
                 <button onclick="{{ t.onClick }}" title="{{ t.title }}" style="{{ t.style }}">{{ t.label }}</button>
@@ -2254,7 +2274,7 @@ window.HASC_COMPLETION_REFERENCE_20260915=[{"id":"2714","name":"Semel, Ben","pos
         <div id="print-staff-transcript" style="background:#fff;border:1px solid #E3E8F5;border-radius:14px;padding:14px 16px 0;box-shadow:0 2px 10px rgba(31,56,100,.07)">
           <div style="display:flex;align-items:center;gap:12px;border-bottom:3px solid #1F3864;padding-bottom:10px;margin-bottom:10px"><img sc-camel-src="{{ docLogo }}" alt="HASC Center" style="width:112px;max-height:50px;height:auto;object-fit:contain"><div><div style="font-size:11px;font-weight:900;letter-spacing:.05em;text-transform:uppercase;color:#2F5496">{{ docPresentedBy }}</div><div style="font-size:16px;font-weight:900;color:#10284d">Official Staff Training Transcript</div></div></div>
           <div style="overflow:auto;margin:0 -16px">
-          <sc-raw-table style="border-collapse:collapse;width:100%;font-size:13px">
+          <sc-raw-table class="hasc-staff-trx" style="border-collapse:collapse;width:100%;font-size:13px">
             <sc-raw-thead><sc-raw-tr>
               <sc-raw-th style="{{ thStyle }}">Training</sc-raw-th><sc-raw-th style="{{ thStyle }}">Classification</sc-raw-th><sc-raw-th style="{{ thStyle }}">Completed</sc-raw-th><sc-raw-th style="{{ thStyle }}">Due / Expires</sc-raw-th><sc-raw-th style="{{ thStyle }}">Status</sc-raw-th><sc-raw-th style="{{ thStyle }}">Cert / Verification ID</sc-raw-th>
             </sc-raw-tr></sc-raw-thead>
@@ -2758,7 +2778,7 @@ window.HASC_COMPLETION_REFERENCE_20260915=[{"id":"2714","name":"Semel, Ben","pos
             </div>
           </div>
           <div style="background:#fff;border:1px solid #E3E8F5;border-radius:14px;overflow:hidden;box-shadow:0 2px 10px rgba(31,56,100,.07)">
-            <sc-raw-table style="border-collapse:collapse;width:100%;font-size:13px">
+            <sc-raw-table class="hasc-inst-att" style="border-collapse:collapse;width:100%;font-size:13px">
               <sc-raw-thead><sc-raw-tr>
                 <sc-raw-th style="{{ thStyle }}">Staff</sc-raw-th><sc-raw-th style="{{ thStyle }}">Manager</sc-raw-th><sc-raw-th style="{{ thStyle }};text-align:center">Attendance</sc-raw-th><sc-raw-th style="{{ thStyle }};text-align:center">Result</sc-raw-th>
               </sc-raw-tr></sc-raw-thead>
