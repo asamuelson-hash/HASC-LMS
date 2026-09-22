@@ -1947,6 +1947,23 @@ window.HASC_COMPLETION_REFERENCE_20260915=[{"id":"2714","name":"Semel, Ben","pos
       <sc-if value="{{ sTrainingsTab }}" hint-placeholder-val="{{ false }}">
       <div style="animation:none">
         <h1 style="margin:0 0 4px;font-size:23px;color:#152A4D;font-weight:900">My Trainings</h1>
+        <sc-if value="{{ sReqHas }}" hint-placeholder-val="{{ false }}">
+        <h2 style="margin:10px 0 8px;font-size:16px;color:#152A4D;font-weight:900">My required trainings</h2>
+        <div role="status" style="{{ sReqSummaryStyle }}">{{ sReqSummary }}</div>
+        <sc-for list="{{ sReqRows }}" as="r" hint-placeholder-count="3">
+          <div style="background:#fff;border:1px solid #E3E8F5;border-left:6px solid {{ r.bar }};border-radius:12px;padding:11px 14px;margin-bottom:8px">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+              <div style="min-width:0;flex:1 1 220px">
+                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-weight:900;color:#152A4D;font-size:14px">{{ r.name }}</span><span style="border-radius:999px;padding:2px 9px;font-size:10.5px;font-weight:900;background:{{ r.stBg }};color:{{ r.stFg }}">{{ r.statusLabel }}</span></div>
+                <div style="font-size:12px;color:#475569;margin-top:4px">{{ r.detail }}</div>
+                <sc-if value="{{ r.hasNext }}" hint-placeholder-val="{{ false }}"><div style="font-size:11.5px;color:#667085;margin-top:3px">{{ r.nextLine }}</div></sc-if>
+              </div>
+              <sc-if value="{{ r.hasBtn }}" hint-placeholder-val="{{ false }}"><button onclick="{{ r.onAction }}" style="border:1.5px solid #CBD5EE;border-radius:999px;background:#fff;color:#1F3864;font-weight:800;font-size:12px;padding:8px 13px;cursor:pointer;flex:none">{{ r.btnLabel }}</button></sc-if>
+            </div>
+          </div>
+        </sc-for>
+        <h2 style="margin:18px 0 4px;font-size:16px;color:#152A4D;font-weight:900">Online training</h2>
+        </sc-if>
         <p style="margin:0 0 14px;color:#667085;font-size:13px;max-width:80ch">Online trainings assigned or available to you. Launch a course to complete it — your progress and completion are tracked automatically. Required training updates are built into the course as acknowledgement checkpoints, so you must review and acknowledge them before continuing.</p>
         <sc-if value="{{ sVtUpdateHas }}" hint-placeholder-val="{{ false }}">
         <h2 style="margin:14px 0 9px;font-size:16px;color:#152A4D;font-weight:900">Training updates requiring acknowledgement</h2>
@@ -2126,7 +2143,7 @@ window.HASC_COMPLETION_REFERENCE_20260915=[{"id":"2714","name":"Semel, Ben","pos
         </div>
         </sc-if>
 
-        <sc-if value="{{ sVtHas }}" hint-placeholder-val="{{ false }}">
+        <sc-if value="{{ sOnlineHeader }}" hint-placeholder-val="{{ false }}">
         <h2 style="margin:20px 0 9px;font-size:16px;color:#152A4D;font-weight:900">Online courses</h2>
         </sc-if>
         <sc-if value="{{ sOnlineEmpty }}" hint-placeholder-val="{{ false }}"><div style="padding:30px;text-align:center;color:#667085;border:1px dashed #CBD5EE;background:#FBFCFF;border-radius:14px">No online trainings are assigned to you right now.</div></sc-if>
@@ -2189,6 +2206,7 @@ window.HASC_COMPLETION_REFERENCE_20260915=[{"id":"2714","name":"Semel, Ben","pos
       <div style="animation:none">
         <h1 style="margin:0 0 4px;font-size:23px;color:#152A4D;font-weight:900">Online Training Progress</h1>
         <p style="margin:0 0 14px;color:#667085;font-size:13px">Online course progress for your assigned staff. You can't change completions \u2014 contact the Training Dept. for an exception review.</p>
+        <sc-if value="{{ mOnlineMore }}" hint-placeholder-val="{{ false }}"><div style="font-size:12px;color:#8A4600;background:#FFF6D9;border:1px solid #F2D99C;border-radius:10px;padding:8px 12px;margin-bottom:10px;font-weight:700">{{ mOnlineMoreLine }}</div></sc-if>
         <sc-if value="{{ mOnlineEmpty }}" hint-placeholder-val="{{ false }}"><div style="padding:30px;text-align:center;color:#667085;border:1px dashed #CBD5EE;background:#FBFCFF;border-radius:14px">No online course activity for your staff yet.</div></sc-if>
         <div style="background:#fff;border:1px solid #E3E8F5;border-radius:14px;overflow:auto;box-shadow:0 2px 10px rgba(31,56,100,.07)">
           <sc-raw-table style="border-collapse:collapse;width:100%;font-size:13px">
@@ -2281,6 +2299,24 @@ window.HASC_COMPLETION_REFERENCE_20260915=[{"id":"2714","name":"Semel, Ben","pos
           <div style="{{ kpiCard }}"><div style="font-size:28px;font-weight:900;color:#D9730D;line-height:1">{{ mDueSoon }}</div><div style="{{ kpiLbl }}">Due soon</div></div>
           <div style="{{ kpiCard }}"><div style="font-size:28px;font-weight:900;color:#1F9D55;line-height:1">{{ mPct }}%</div><div style="{{ kpiLbl }}">Team compliant</div></div>
         </div>
+        <div style="background:#fff;border:1px solid #E3E8F5;border-left:6px solid #D93025;border-radius:16px;padding:16px 18px;box-shadow:0 2px 10px rgba(31,56,100,.07);margin-bottom:16px">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+            <h2 style="margin:0;font-size:17px;color:#152A4D;font-weight:900">Out of compliance</h2>
+            <div style="display:flex;gap:8px;flex-wrap:wrap"><button onclick="{{ goMRegister }}" style="border:0;border-radius:999px;background:{{ btn }};color:#fff;font-weight:800;font-size:12px;padding:8px 14px;cursor:pointer">Register staff</button><button onclick="{{ goMNeeds }}" style="border:1.5px solid #CBD5EE;border-radius:999px;background:#fff;color:#1F3864;font-weight:800;font-size:12px;padding:8px 14px;cursor:pointer">See full report</button></div>
+          </div>
+          <sc-if value="{{ mOocHas }}" hint-placeholder-val="{{ false }}">
+            <p style="margin:6px 0 10px;color:#667085;font-size:12.5px">{{ mOocLine }}</p>
+            <div style="max-height:360px;overflow:auto">
+            <sc-for list="{{ mOocRows }}" as="o" hint-placeholder-count="3">
+              <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:9px 4px;border-bottom:1px solid #EEF1F8;flex-wrap:wrap">
+                <div style="min-width:0;flex:1 1 240px"><div style="font-size:13px;font-weight:800;color:#152A4D">{{ o.name }}</div><div style="font-size:11px;color:#8a93a6">{{ o.meta }}</div><div style="font-size:12px;color:#A61B12;margin-top:3px">{{ o.courses }}</div></div>
+                <span style="border-radius:999px;padding:3px 9px;font-size:10.5px;font-weight:900;background:#FCE4E1;color:#A61B12;flex:none">{{ o.count }}</span>
+              </div>
+            </sc-for>
+            </div>
+          </sc-if>
+          <sc-if value="{{ mOocEmpty }}" hint-placeholder-val="{{ false }}"><p style="margin:8px 0 0;color:#1F7A44;font-size:13px;font-weight:700">No one on your team has an overdue required training.</p></sc-if>
+        </div>
         <div style="display:grid;grid-template-columns:1.15fr 1fr;gap:14px;align-items:start;margin-bottom:16px">
           <div style="background:#fff;border:1px solid #E3E8F5;border-radius:16px;padding:16px 18px;box-shadow:0 2px 10px rgba(31,56,100,.07)">
             <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
@@ -2333,6 +2369,7 @@ window.HASC_COMPLETION_REFERENCE_20260915=[{"id":"2714","name":"Semel, Ben","pos
             <sc-if value="{{ mProgEmpty }}" hint-placeholder-val="{{ false }}">
               <div style="border:1.5px dashed #CBD5EE;border-radius:12px;padding:16px;text-align:center;color:#8a93a6;font-size:12.5px">No staff in your locations yet.</div>
             </sc-if>
+            <sc-if value="{{ mProgMore }}" hint-placeholder-val="{{ false }}"><div style="font-size:11.5px;color:#667085;margin-top:8px;font-weight:700">{{ mProgMoreLine }}</div></sc-if>
           </div>
         </div>
         <div style="background:#fff;border:1px solid #E3E8F5;border-radius:16px;padding:16px 18px;box-shadow:0 2px 10px rgba(31,56,100,.07)">
@@ -2363,7 +2400,7 @@ window.HASC_COMPLETION_REFERENCE_20260915=[{"id":"2714","name":"Semel, Ben","pos
       <sc-if value="{{ mNeeds }}" hint-placeholder-val="{{ false }}">
       <div style="animation:none">
         <h1 style="margin:0 0 4px;font-size:23px;color:#152A4D;font-weight:900">{{ mNeedsTitle }} — Compliance Color Report</h1>
-        <p style="margin:0 0 12px;color:#667085;font-size:13px">Each cell shows the completion date, colored by compliance status. "Missing" = required but not on record. <b>Green, Yellow, Orange, and White all count as compliant; Red alone is noncompliant. White indicates not yet required, not required, or N/A.</b> <b>Self-Direction / Respite / Com Hab / FI staff meet the orientation requirement by completing EITHER SDCH 1 &amp; 2 OR Orientation 1–3</b> — completing one path turns both green.</p>
+        <p style="margin:0 0 12px;color:#667085;font-size:13px">Each cell shows the completion date, colored by compliance status. "Missing" = required but not on record. <b>Green, Yellow, Orange, and White all count as compliant; Red alone is noncompliant. White indicates a required course that is not yet due. Courses not required for the person (N/A) are not counted in the percentage.</b> <b>Self-Direction / Respite / Com Hab / FI staff meet the orientation requirement by completing EITHER SDCH 1 &amp; 2 OR Orientation 1–3</b> — completing one path turns both green.</p>
         <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
           <label style="font-size:12px;font-weight:800;color:#1F3864">Location
             <sc-raw-select value="{{ mLoc }}" onchange="{{ onMgrLoc }}" style="margin-left:7px;border:1.5px solid #CBD5EE;border-radius:10px;padding:7px 10px;font-size:12.5px;background:#fff;color:#152A4D;font-weight:700;max-width:320px">
@@ -2825,7 +2862,7 @@ window.HASC_COMPLETION_REFERENCE_20260915=[{"id":"2714","name":"Semel, Ben","pos
       <sc-if value="{{ aLocationRankTab }}" hint-placeholder-val="{{ false }}">
       <div style="animation:none">
         <h1 style="margin:0 0 4px;font-size:23px;color:#152A4D;font-weight:900">Location Performance Rankings</h1>
-        <p style="margin:0 0 14px;color:#667085;font-size:13px;max-width:100ch">Ranks locations by training compliance using the LMS's existing compliance rules. <b>Green, Yellow, Orange, and White count as compliant; Red alone is noncompliant. White indicates not yet required, not required, or N/A.</b> The manager shown comes from the Location Directory when assigned, with roster manager data used as a fallback.</p>
+        <p style="margin:0 0 14px;color:#667085;font-size:13px;max-width:100ch">Ranks locations by training compliance using the LMS's existing compliance rules. <b>Green, Yellow, Orange, and White count as compliant; Red alone is noncompliant. White indicates a required course that is not yet due. Courses not required for the person (N/A) are not counted in the percentage.</b> The manager shown comes from the Location Directory when assigned, with roster manager data used as a fallback.</p>
 
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin-bottom:16px">
           <div style="background:#fff;border:1px solid #E3E8F5;border-radius:14px;padding:13px 15px;box-shadow:0 2px 10px rgba(31,56,100,.06)"><div style="font-size:25px;font-weight:900;color:#1F3864;line-height:1">{{ locationRankRanked }}</div><div style="font-size:10.5px;font-weight:800;color:#667085;text-transform:uppercase;letter-spacing:.04em;margin-top:5px">Locations ranked</div><div style="font-size:10.5px;color:#94a3b8;margin-top:3px">{{ locationRankLocations }} with active staff · {{ locationRankStaff }} staff total</div></div>
@@ -3345,6 +3382,26 @@ window.HASC_COMPLETION_REFERENCE_20260915=[{"id":"2714","name":"Semel, Ben","pos
       </div>
       </sc-if>
 
+      <sc-if value="{{ aQaTab }}" hint-placeholder-val="{{ false }}">
+      <div style="animation:none">
+        <h1 style="margin:0 0 4px;font-size:23px;color:#152A4D;font-weight:900">QA Checks</h1>
+        <p style="margin:0 0 12px;color:#667085;font-size:13px;max-width:90ch">Outcome checks of the compliance rules, the shared compliance aggregation and data integrity. Each scenario runs on copies of staff records, so no live data is changed.</p>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
+          <div style="background:#E4F6EB;border:1px solid #BFE6CC;border-radius:12px;padding:8px 14px"><b style="font-size:20px;color:#1F7A44">{{ qaSummary.pass }}</b> <span style="font-size:11px;color:#1F7A44;font-weight:800">PASSING</span></div>
+          <div style="background:#FCE4E1;border:1px solid #F3C9C4;border-radius:12px;padding:8px 14px"><b style="font-size:20px;color:#A61B12">{{ qaSummary.fail }}</b> <span style="font-size:11px;color:#A61B12;font-weight:800">FAILING</span></div>
+          <div style="background:#EEF1F8;border:1px solid #D6DEEE;border-radius:12px;padding:8px 14px"><b style="font-size:20px;color:#1F3864">{{ qaSummary.total }}</b> <span style="font-size:11px;color:#46557a;font-weight:800">CHECKS</span></div>
+          <span style="font-size:11px;color:#94a3b8;font-weight:700">Last run: {{ qaLastRun }}</span>
+          <button onclick="{{ onRunAllQa }}" style="border:0;border-radius:999px;background:{{ btn }};color:#fff;font-weight:800;font-size:12px;padding:9px 16px;cursor:pointer">Run again</button>
+        </div>
+        <sc-for list="{{ qaTests }}" as="t" hint-placeholder-count="4">
+          <div style="background:#fff;border:1px solid #E3E8F5;border-left:5px solid {{ t.pass }};border-radius:11px;padding:9px 13px;margin-bottom:7px;display:flex;gap:10px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap">
+            <div style="min-width:0;flex:1 1 300px"><div style="font-size:13px;font-weight:800;color:#152A4D">{{ t.name }}</div><div style="font-size:11.5px;color:#667085;margin-top:2px">Expected: {{ t.expected }} · Actual: {{ t.actual }}</div></div>
+            <span style="border-radius:999px;padding:3px 10px;font-size:10.5px;font-weight:900;background:{{ t.badgeBg }};color:{{ t.pass }};flex:none">{{ t.badge }}</span>
+          </div>
+        </sc-for>
+      </div>
+      </sc-if>
+
       <sc-if value="{{ aRuleDiag }}" hint-placeholder-val="{{ false }}">
       <div style="animation:none">
         <h1 style="margin:0 0 4px;font-size:23px;color:#152A4D;font-weight:900">Compliance Rule Diagnostic</h1>
@@ -3427,12 +3484,13 @@ window.HASC_COMPLETION_REFERENCE_20260915=[{"id":"2714","name":"Semel, Ben","pos
       <div style="animation:none">
         <h1 style="margin:0 0 4px;font-size:23px;color:#152A4D;font-weight:900">Training Department Command Center</h1>
         <p style="margin:0 0 14px;color:#667085;font-size:13px">Agency-wide compliance, pending session requests, and upcoming sessions.</p>
-        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:16px">
-          <div style="{{ kpiCard }}"><div style="font-size:26px;font-weight:900;color:#152A4D;line-height:1">{{ aStaffCount }}</div><div style="{{ kpiLbl }}">Staff</div></div>
-          <div style="{{ kpiCard }}"><div style="font-size:26px;font-weight:900;color:#D93025;line-height:1">{{ aRed }}</div><div style="{{ kpiLbl }}">Overdue items</div></div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px">
+          <div style="{{ kpiCard }}"><div style="font-size:26px;font-weight:900;color:#152A4D;line-height:1">{{ aStaffCount }}</div><div style="{{ kpiLbl }}">Active staff</div></div>
+          <div style="{{ kpiCard }}"><div style="font-size:26px;font-weight:900;color:#1F9D55;line-height:1">{{ aStaffPct }}%</div><div style="{{ kpiLbl }}">Staff fully compliant</div><div style="font-size:10.5px;color:#667085;margin-top:3px">No overdue required training</div></div>
+          <div style="{{ kpiCard }}"><div style="font-size:26px;font-weight:900;color:#D93025;line-height:1">{{ aRed }}</div><div style="{{ kpiLbl }}">Overdue items (courses)</div></div>
           <div style="{{ kpiCard }}"><div style="font-size:26px;font-weight:900;color:#D9730D;line-height:1">{{ aPending }}</div><div style="{{ kpiLbl }}">Session requests</div></div>
           <div style="{{ kpiCard }}"><div style="font-size:26px;font-weight:900;color:#2F5496;line-height:1">{{ aSessionCount }}</div><div style="{{ kpiLbl }}">Upcoming sessions</div></div>
-          <div style="{{ kpiCard }}"><div style="font-size:26px;font-weight:900;color:#1F9D55;line-height:1">{{ aPct }}%</div><div style="{{ kpiLbl }}">Agency compliant</div></div>
+          <div style="{{ kpiCard }}"><div style="font-size:26px;font-weight:900;color:#1F9D55;line-height:1">{{ aPct }}%</div><div style="{{ kpiLbl }}">Requirements met</div><div style="font-size:10.5px;color:#667085;margin-top:3px">Share of required courses current</div></div>
         </div>
         <div style="display:grid;grid-template-columns:1.15fr 1fr;gap:14px;align-items:start;margin-bottom:16px">
         <div style="background:#fff;border:1px solid #E3E8F5;border-radius:16px;padding:16px 18px;box-shadow:0 2px 10px rgba(31,56,100,.07)">
@@ -4051,7 +4109,7 @@ window.HASC_COMPLETION_REFERENCE_20260915=[{"id":"2714","name":"Semel, Ben","pos
       <div id="hasc-color-report" style="animation:none">
         <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:10px">
           <div><h1 style="margin:0 0 4px;font-size:23px;color:#152A4D;font-weight:900">Compliance Color Report</h1>
-          <p style="margin:0;color:#667085;font-size:13px">Agency-wide. Each cell shows the completion date, colored by compliance status. <b>Green, Yellow, Orange, and White count as compliant; Red alone is noncompliant. White indicates not yet required, not required, or N/A.</b> SDCH staff meet orientation via EITHER SDCH 1 &amp; 2 OR O1–3.</p></div>
+          <p style="margin:0;color:#667085;font-size:13px">Agency-wide. Each cell shows the completion date, colored by compliance status. <b>Green, Yellow, Orange, and White count as compliant; Red alone is noncompliant. White indicates a required course that is not yet due. Courses not required for the person (N/A) are not counted in the percentage.</b> SDCH staff meet orientation via EITHER SDCH 1 &amp; 2 OR O1–3.</p></div>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             <button onclick="{{ onColorReportExportWorkbook }}" style="border:1.5px solid #2F5496;border-radius:999px;background:#fff;color:#1F3864;font-weight:800;font-size:13px;padding:9px 15px;cursor:pointer">⬇ Export Excel Workbook</button>
             <button onclick="{{ onPrint }}" style="border:0;border-radius:999px;background:{{ btn }};color:#fff;font-weight:800;font-size:13px;padding:10px 16px;cursor:pointer">🖨️ Print / PDF</button>
@@ -4082,7 +4140,7 @@ window.HASC_COMPLETION_REFERENCE_20260915=[{"id":"2714","name":"Semel, Ben","pos
             <button onclick="{{ aNext }}" style="border:1.5px solid #CBD5EE;border-radius:8px;background:#fff;color:#1F3864;font-weight:800;font-size:12px;padding:7px 12px;cursor:pointer">Next</button>
           </div>
         </div>
-        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px"><div style="background:#fff;border:1px solid #E3E8F5;border-radius:12px;padding:10px 13px"><div style="font-size:22px;font-weight:900;color:#1F9D55;line-height:1">{{ aPctFiltered }}%</div><div style="font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:#667085;margin-top:3px">Compliant</div></div><div style="background:#fff;border:1px solid #E3E8F5;border-radius:12px;padding:10px 13px"><div style="font-size:22px;font-weight:900;color:#D93025;line-height:1">{{ aOverdueStaff }}</div><div style="font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:#667085;margin-top:3px">With overdue</div></div><div style="background:#fff;border:1px solid #E3E8F5;border-radius:12px;padding:10px 13px"><div style="font-size:22px;font-weight:900;color:#D9730D;line-height:1">{{ aDueSoon }}</div><div style="font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:#667085;margin-top:3px">Due soon</div></div><div style="background:#fff;border:1px solid #E3E8F5;border-radius:12px;padding:10px 13px"><div style="font-size:18px;font-weight:900;color:#152A4D;line-height:1.1;margin-top:3px">{{ aCountLabel }}</div><div style="font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:#667085;margin-top:3px">{{ showArchived ? 'Records in view' : 'Active staff in scope' }}</div></div></div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px"><div style="background:#fff;border:1px solid #E3E8F5;border-radius:12px;padding:10px 13px"><div style="font-size:22px;font-weight:900;color:#1F9D55;line-height:1">{{ aPctFiltered }}%</div><div style="font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:#667085;margin-top:3px">Compliant</div></div><div style="background:#fff;border:1px solid #E3E8F5;border-radius:12px;padding:10px 13px"><div style="font-size:22px;font-weight:900;color:#D93025;line-height:1">{{ aOverdueStaff }}</div><div style="font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:#667085;margin-top:3px">With overdue</div></div><div style="background:#fff;border:1px solid #E3E8F5;border-radius:12px;padding:10px 13px"><div style="font-size:22px;font-weight:900;color:#D9730D;line-height:1">{{ aDueSoon }}</div><div style="font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:#667085;margin-top:3px">Due soon</div></div><div style="background:#fff;border:1px solid #E3E8F5;border-radius:12px;padding:10px 13px"><div style="font-size:18px;font-weight:900;color:#152A4D;line-height:1.1;margin-top:3px">{{ aCountLabel }}</div><div style="font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:#667085;margin-top:3px">{{ aCountCaption }}</div></div></div>
         <sc-if value="{{ aMatrixError }}" hint-placeholder-val="{{ false }}"><div style="background:#FCE4E1;border:1px solid #e7a79f;border-left:5px solid #b3392b;border-radius:12px;padding:16px 18px;font-size:13px;color:#7a2a22;font-weight:700">Report could not be generated. The rest of the system is unaffected — review the error detail below or use System Center diagnostics.<div style="font-weight:600;font-family:ui-monospace,Menlo,monospace;font-size:11px;margin-top:6px;color:#9a4a40">{{ aMatrixError }}</div></div></sc-if>
         <sc-if value="{{ aMatrixEmpty }}" hint-placeholder-val="{{ false }}"><div style="background:#F8FAFE;border:1px dashed #CBD5EE;border-radius:12px;padding:26px;text-align:center;color:#667085;font-size:13px;font-weight:700">No staff match the selected filters.</div></sc-if>
         <sc-if value="{{ aMatrixHasFlagged }}" hint-placeholder-val="{{ false }}"><div style="background:#FFF6D9;border:1px solid #f0dca0;border-left:4px solid #C9A227;border-radius:10px;padding:9px 13px;margin-bottom:10px;font-size:11.5px;color:#7a5b00;font-weight:700">⚠ {{ aMatrixFlagged }} row(s) had incomplete data and are flagged for admin review (highlighted below). The rest of the report rendered normally.</div></sc-if>
@@ -6078,7 +6136,7 @@ window.HASC_COMPLETION_REFERENCE_20260915=[{"id":"2714","name":"Semel, Ben","pos
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
           <sc-raw-select value="{{ vtFilterVideo }}" onchange="{{ onVtFilterVideo }}" style="border:1.5px solid #CBD5EE;border-radius:9px;padding:8px 11px;font-size:12.5px;background:#fff;font-weight:700"><sc-for list="{{ vtFilterVideoOpts }}" as="o" hint-placeholder-count="2"><option value="{{ o.v }}">{{ o.label }}</option></sc-for></sc-raw-select>
           <sc-raw-select value="{{ vtFilterLoc }}" onchange="{{ onVtFilterLoc }}" style="border:1.5px solid #CBD5EE;border-radius:9px;padding:8px 11px;font-size:12.5px;background:#fff;font-weight:700"><sc-for list="{{ vtFilterLocOpts }}" as="o" hint-placeholder-count="2"><option value="{{ o.v }}">{{ o.label }}</option></sc-for></sc-raw-select>
-          <sc-raw-select value="{{ vtFilterStatus }}" onchange="{{ onVtFilterStatus }}" style="border:1.5px solid #CBD5EE;border-radius:9px;padding:8px 11px;font-size:12.5px;background:#fff;font-weight:700"><option value="">All statuses</option><option value="not_started">Not started</option><option value="watching">Watching</option><option value="failed_quiz">Quiz not passed</option><option value="passed">Passed</option><option value="overdue">Overdue</option></sc-raw-select>
+          <sc-raw-select value="{{ vtFilterStatus }}" onchange="{{ onVtFilterStatus }}" style="border:1.5px solid #CBD5EE;border-radius:9px;padding:8px 11px;font-size:12.5px;background:#fff;font-weight:700"><option value="">All statuses</option><option value="not_started">Not started</option><option value="watching">In progress</option><option value="failed_quiz">Quiz not passed</option><option value="passed">Completed</option><option value="overdue">Overdue</option></sc-raw-select>
           <button onclick="{{ onVtClearFilters }}" style="border:1.5px solid #CBD5EE;border-radius:999px;background:#fff;color:#46557a;font-weight:800;font-size:12px;padding:8px 14px;cursor:pointer">Clear</button>
         </div>
         <div class="hasc-vt-roster" style="background:#fff;border:1px solid #E3E8F5;border-radius:14px;overflow:hidden;box-shadow:0 1px 7px rgba(31,56,100,.05)">
@@ -6940,7 +6998,7 @@ window.HASC_COMPLETION_REFERENCE_20260915=[{"id":"2714","name":"Semel, Ben","pos
               <div style="color:#94a3b8;font-weight:700">Expiration</div><div style="color:#475569">{{ vmExpLabel }}</div>
               <div style="color:#94a3b8;font-weight:700">Source</div><div style="color:#475569">{{ vmRec.displaySource }}</div>
               <div style="color:#94a3b8;font-weight:700">Certificate</div><div style="color:#475569;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11.5px">{{ vmCertLabel }}</div>
-              <div style="color:#94a3b8;font-weight:700">Related session</div><div style="color:#475569">{{ vmRec.sessLabel }}</div>
+              <div style="color:#94a3b8;font-weight:700">Related session</div><div style="color:#475569">{{ vmSessLabel }}</div>
             </div>
           </div>
           <label style="display:block;font-size:12px;font-weight:800;color:#1F3864;margin-bottom:5px">Reason for voiding <span style="color:#C0392B">*</span></label>
@@ -7080,13 +7138,15 @@ window.HASC_COMPLETION_REFERENCE_20260915=[{"id":"2714","name":"Semel, Ben","pos
             <sc-for list="{{ cp.quizQs }}" as="q" hint-placeholder-count="3">
               <div style="margin-bottom:14px"><div style="font-size:14px;font-weight:800;color:#152A4D;margin-bottom:8px">{{ q.q }}</div><sc-for list="{{ q.opts }}" as="o" hint-placeholder-count="3"><button onclick="{{ o.onPick }}" style="{{ o.style }}">{{ o.text }}</button></sc-for></div>
             </sc-for>
-            <sc-if value="{{ cp.quizShown }}" hint-placeholder-val="{{ false }}"><div style="border-radius:11px;padding:11px 14px;font-size:13px;font-weight:800;background:{{ cp.quizPass }};color:#fff;background:#EEF1F8;color:#152A4D">Score: {{ cp.quizScore }}% — {{ cp.nextLabel }}</div></sc-if>
+            <sc-if value="{{ cp.quizShown }}" hint-placeholder-val="{{ false }}"><div style="{{ cp.quizResultStyle }}">{{ cp.quizResultLine }}</div></sc-if>
+            <sc-if value="{{ cp.quizCanRetake }}" hint-placeholder-val="{{ false }}"><button onclick="{{ cp.onRetakeQuiz }}" style="border:0;border-radius:999px;background:{{ btn }};color:#fff;font-weight:800;font-size:13px;padding:10px 18px;cursor:pointer;margin-top:8px">Retake quiz</button></sc-if>
+            <sc-if value="{{ cp.quizNoAttempts }}" hint-placeholder-val="{{ false }}"><div style="font-size:12.5px;color:#A61B12;font-weight:700;margin-top:8px">No quiz attempts remain. Contact the Training Department to reset your attempts.</div></sc-if>
             <sc-if value="{{ cp.quizAllAnswered }}" hint-placeholder-val="{{ false }}"><button onclick="{{ cp.onSubmitQuiz }}" style="border:0;border-radius:999px;background:{{ btn }};color:#fff;font-weight:800;font-size:13px;padding:10px 18px;cursor:pointer;margin-top:4px">Submit quiz</button></sc-if>
           </sc-if>
 
           <sc-if value="{{ cp.isAttest }}" hint-placeholder-val="{{ false }}">
             <label style="display:flex;align-items:flex-start;gap:11px;border:1.5px solid #CBD5EE;border-radius:12px;padding:14px 16px;cursor:pointer;background:#FBFCFF"><input type="checkbox" checked="{{ cp.attestChecked }}" onchange="{{ cp.onAttest }}" style="width:18px;height:18px;accent-color:#2F5496;margin-top:1px"><span style="font-size:13.5px;color:#152A4D;font-weight:700;line-height:1.5">{{ cp.attestText }}</span></label>
-            <sc-if value="{{ cp.needSig }}" hint-placeholder-val="{{ false }}"><div style="margin-top:12px"><div style="font-size:11px;font-weight:800;color:#46557a;margin-bottom:4px">Signature — type your full name</div><input type="text" value="{{ cp.sigText }}" oninput="{{ cp.onSig }}" placeholder="Your full name" style="width:100%;max-width:340px;border:1.5px solid #CBD5EE;border-radius:9px;padding:10px 13px;font-size:13px;color:#152A4D;font-weight:700"><div style="font-size:11px;color:#94a3b8;margin-top:4px">A date &amp; time stamp is recorded automatically when you finish.</div></div></sc-if>
+            <sc-if value="{{ cp.needSig }}" hint-placeholder-val="{{ false }}"><div style="margin-top:12px"><div style="font-size:11px;font-weight:800;color:#46557a;margin-bottom:4px">Signature — type your full name</div><input type="text" value="{{ cp.sigText }}" oninput="{{ cp.onSig }}" placeholder="Your full name" style="width:100%;max-width:340px;border:1.5px solid #CBD5EE;border-radius:9px;padding:10px 13px;font-size:13px;color:#152A4D;font-weight:700"><sc-if value="{{ cp.sigMismatch }}" hint-placeholder-val="{{ false }}"><div role="alert" style="font-size:11.5px;color:#A61B12;margin-top:4px;font-weight:700">{{ cp.sigHint }}</div></sc-if><div style="font-size:11px;color:#94a3b8;margin-top:4px">A date &amp; time stamp is recorded automatically when you finish.</div></div></sc-if>
           </sc-if>
 
           <sc-if value="{{ cp.isCert }}" hint-placeholder-val="{{ false }}">
@@ -7393,7 +7453,7 @@ class Component extends DCLogic {
     {id:'staff',    label:'Staff',        tabs:['records','followup','transcripts','certificates','voids','progress']},
     {id:'reports',  label:'Reports',      tabs:['reports','forecast','report','locationrank']},
     {id:'setup',    label:'Setup',        tabs:['content','courseinfo','trainingreq','autoassign','vtrain','locations','system',
-                                                   'rulediag','audit','instructors','catalog','profiles','operations','backup','dupes']}
+                                                   'rulediag','audit','instructors','catalog','profiles','operations','backup','dupes','qa']}
   ];
   navGroupOf(tabKey){ const g=this.NAV_ADMIN_GROUPS.find(x=>x.tabs.indexOf(tabKey)>=0); return g?g.id:null; }
   navFor(role,opts){
@@ -8042,9 +8102,27 @@ class Component extends DCLogic {
      After ART is completed once, the normal annual ART renewal clock runs from
      the ART completion date. Missing or partial orientation data never makes
      ART overdue; it remains not-yet-due until the pathway has a dated finish. */
+  // Earliest non-voided, non-future completion date per staff|code from completion records.
+  _earliestCompletionIndex(){
+    return this._memo('earliestCompIdx',[this.state.docs&&this.state.docs.completions,this.state.docs&&this.state.docs.completionVoids,this.TODAY_MDY.join('/')],()=>{
+      const m=new Map(), docs=this.state.docs||{}, vk=new Set((docs.completionVoids||[]).map(v=>v.key)), todayVal=this._todayVal();
+      (docs.completions||[]).forEach(x=>{ if(!x||x.referenceSuperseded===true||x.countsTowardCompliance===false||x.counts_toward_compliance===false) return; const sid=this.completionStaffId(x), date=this.completionDate(x); if(!sid||!date||date==='\u2014') return; const dv=this.compDateVal(date); if(!dv||dv>todayVal) return;
+        this.completionRosterCodes(x).forEach(({code:k,via})=>{ if(vk.has(this.completionKey(sid,k,date))||vk.has(this.completionKey(sid,via,date))) return; const key=String(sid)+'|'+k, cur=m.get(key); if(!cur||dv<cur.v) m.set(key,{v:dv,date}); }); });
+      return m; });
+  }
+  // First date the staff member completed `code`: the earliest of the current date, the preserved
+  // superseded roster date (baseDt) and every completion record. A refresher never moves it later.
+  firstCompletionDate(staff,code){
+    if(!staff) return null; const sid=String(staff.id), vk=new Set(((this.state.docs&&this.state.docs.completionVoids)||[]).filter(v=>String(v.staffId)===sid).map(v=>v.key));
+    const c=[staff.dt&&staff.dt[code], staff.baseDt&&staff.baseDt[code]].filter(d=>d&&d!=='\u2014'&&!vk.has(this.completionKey(sid,code,d))).map(d=>this.parseMDY(d)).filter(Boolean);
+    const e=this._earliestCompletionIndex().get(sid+'|'+code); if(e){ const d=this.parseMDY(e.date); if(d) c.push(d); }
+    if(!c.length) return null; return new Date(Math.min.apply(null,c.map(d=>d.getTime())));
+  }
   artOrientationAnchor(staff){
     if(!staff) return null;
-    const completedPath=(codes,label)=>{ const dates=codes.map(c=>this.parseMDY(staff.dt&&staff.dt[c])); if(!codes.length||dates.some(d=>!d)) return null; const date=new Date(Math.max.apply(null,dates.map(d=>d.getTime()))); return {date,codes:codes.slice(),label}; };
+    // Anchor on when the pathway was FIRST completed: earliest completion per code, then the latest
+    // of those across the pathway codes (CMP-07). Refresher orientation does not push ART out.
+    const completedPath=(codes,label)=>{ const dates=codes.map(c=>(staff.dt&&staff.dt[c])?this.firstCompletionDate(staff,c):null); if(!codes.length||dates.some(d=>!d)) return null; const date=new Date(Math.max.apply(null,dates.map(d=>d.getTime()))); return {date,codes:codes.slice(),label}; };
     if(this.isSDCH(staff)){
       const paths=[]; const direct=completedPath(['SDCH1','SDCH2'],'SDCH 1 and SDCH 2'); if(direct) paths.push(direct);
       const equiv=completedPath(['O1','O2','O3'],'Orientation 1, Orientation 2, and Orientation 3 equivalency'); if(equiv) paths.push(equiv);
@@ -8197,6 +8275,11 @@ class Component extends DCLogic {
     const p=raw.split(/\s+/).filter(Boolean);
     return {first:p[0]||'',last:(p.length>1?p[p.length-1]:(p[0]||''))};
   }
+  // STF-07: an attestation signature must be the signer's own name, case/space-insensitive, as
+  // "First Last" (middle names allowed) or "Last, First".
+  signatureMatchesName(sig,name){ const n=v=>String(v||'').toLowerCase().replace(/[.]/g,'').replace(/\s+/g,' ').trim(); const p=this.nameParts(name), first=n(p.first), last=n(p.last), s=n(sig); if(!s||!first||!last) return false;
+    if(s.includes(',')){ const i=s.indexOf(','), sl=s.slice(0,i).trim(), sf=s.slice(i+1).trim(); return sl===last&&(sf===first||sf.startsWith(first+' ')); }
+    return s===first+' '+last||(s.startsWith(first+' ')&&s.endsWith(' '+last)); }
   deriveEmail(name){ const p=this.nameParts(name); if(!p.first||!p.last) return ''; return ((p.first[0]||'')+p.last).toLowerCase().replace(/[^a-z]/g,'')+'@hasccenter.org'; }
   savePwSetup(){ const s=this.state.pwSetup; if(!s) return; const cu=this.state.currentUser;
     if(!cu||cu.role!=='staff'||String(cu.staffId)!==String(s.staffId)){ this.setState({pwSetup:null,pwNew1:'',pwNew2:'',pwSetupErr:''}); return; } const a=String(this.state.pwNew1||''), b=String(this.state.pwNew2||'');
@@ -8385,7 +8468,7 @@ class Component extends DCLogic {
     if(this.__sdT){ Object.keys(this.__sdT).forEach(k=>clearTimeout(this.__sdT[k])); this.__sdT={}; }
     this.setState(base);
   }
-  go(tab){ const retired=new Set(['qa','seclab','devdash','backend','supahandoff','demo','excheck','handoff','prod']); if(this.state.role==='admin'&&retired.has(tab)) tab='system'; if(((this.state.tab||{})[this.state.role])===tab) return; if(this.state.role==='admin'&&tab==='trainingreq'){ const usable=(this.state.locations||[]).filter(l=>!l.archived); const cur=usable.find(l=>l.id===this.state.locDetail); const first=cur||usable.find(l=>l.active)||usable[0]||null; this._reasonDraft=''; this.setState(s=>({tab:{...s.tab,admin:'trainingreq'},locDetail:first?first.id:null,locReqDraft:null})); return; } this.setState(s=>({tab:{...s.tab,[s.role]:tab}})); }
+  go(tab){ const retired=new Set(['seclab','devdash','backend','supahandoff','demo','excheck','handoff','prod']); if(this.state.role==='admin'&&retired.has(tab)) tab='system'; if(((this.state.tab||{})[this.state.role])===tab) return; if(this.state.role==='admin'&&tab==='trainingreq'){ const usable=(this.state.locations||[]).filter(l=>!l.archived); const cur=usable.find(l=>l.id===this.state.locDetail); const first=cur||usable.find(l=>l.active)||usable[0]||null; this._reasonDraft=''; this.setState(s=>({tab:{...s.tab,admin:'trainingreq'},locDetail:first?first.id:null,locReqDraft:null})); return; } this.setState(s=>({tab:{...s.tab,[s.role]:tab}})); }
   toast(m){ this.setState({toast:m}); clearTimeout(this._t); this._t=setTimeout(()=>this.setState({toast:null}),2600); }
   closeModal(){ this.setState({modal:null,pStep:0,pPick:null}); }
   isMobilePrintContext(){ try{ const ua=(navigator&&navigator.userAgent)||''; const touch=/Android|iPhone|iPad|iPod|Mobile|Silk|Kindle/i.test(ua); const mq=window.matchMedia&&((window.matchMedia('(max-width: 900px)').matches)||(window.matchMedia('(pointer: coarse)').matches)); return !!(touch||mq); }catch(e){ return false; } }
@@ -9033,7 +9116,7 @@ class Component extends DCLogic {
     if(course&&course.scorm){ this.launchScormCourse(cid,{preview:false}); return; }
     if(cuS && cuS.role==='staff' && cuS.staffId){ const _c=course; const _p=this.getProg(cid, cuS.staffId);
       if(_c && _p && _p.status==='Not Started') this.logTrainingEvent('start', _c.title, 'Online course', cuS.staffId); }
-    this.setState({coursePlayerId:cid, cpStep:0, cpEmbedAns:null, cpEmbedDone:false, cpQuizAns:{}, cpQuizShown:false, cpAttest:false, cpWatch:0}); }
+    this.setState({coursePlayerId:cid, cpStep:0, cpEmbedAns:null, cpEmbedDone:false, cpQuizAns:{}, cpQuizShown:false, cpQuizPassed:false, cpLastScore:null, cpAttest:false, cpWatch:0}); }
   closeCoursePlayer(){ const hadV=!!this.state.vtCourse; this.setState({coursePlayerId:null, vtCourse:null}); if(hadV) this.vtClose(); }
 
   // ===== SCORM 1.2 / SCORM 2004 IMPORT + RUNTIME ==========================
@@ -9201,7 +9284,7 @@ class Component extends DCLogic {
   cpSimWatch(){ this.setState({cpWatch:100}); const cu=this.state.currentUser; const sid=cu&&cu.role==='staff'&&cu.staffId?String(cu.staffId):null; if(!sid)return; const c=this.state.onlineCourses.find(x=>x.id===this.state.coursePlayerId); this._mirrorToService('video.progress', S=>S.recordVideoProgress({staffId:sid,courseId:c&&c.id,moduleId:((c&&c.id)||'oc')+'-vid',videoId:'sample',watchedSeconds:100,totalSeconds:100,requiredPercent:95})); } // simulate finishing the video (prod: real timeupdate events)
   cpAnswerEmbed(i){ this.setState({cpEmbedAns:i}); }
   cpEmbedContinue(){ this.setState({cpEmbedDone:true}); }
-  cpSetQuiz(qi,oi){ this.setState(s=>({cpQuizAns:{...s.cpQuizAns,[qi]:oi}})); }
+  cpSetQuiz(qi,oi){ if(this.state.cpQuizShown) return; this.setState(s=>({cpQuizAns:{...s.cpQuizAns,[qi]:oi}})); }
   cpSubmitQuiz(){
     const c=this.state.onlineCourses.find(x=>x.id===this.state.coursePlayerId)||((this.state.vtCourse&&this.state.vtCourse.id===this.state.coursePlayerId)?this.state.vtCourse:null);
     if(!c) return;
@@ -9213,32 +9296,36 @@ class Component extends DCLogic {
       const st=this.staffById(sid); const sname=st?st.name:sid;
       const v=this.SS().vtVideoForStaff(c.vtVideoId,sid)||this.SS().vtVideoById(c.vtVideoId);
       const finals=this.SS().vtFinal(c.vtVideoId,sid);
-      if(!v||!finals.length){ this.setState({cpQuizShown:true,cpLastScore:100}); return; }
+      if(!v||!finals.length){ this.setState({cpQuizShown:true,cpLastScore:100,cpQuizPassed:true}); return; }
       if(finals.some((x,i)=>this.state.cpQuizAns[i]===undefined)){ this.toast('Answer every quiz question before submitting.'); return; }
       const p=this.SS().vtProgressFor(c.vtVideoId,sid,v.version_number); const used=((p&&p.attempts)||[]).length;
       if(used>=(v.max_attempts||3)){ this.toast('No quiz attempts remain. Contact the Training Department.'); return; }
       const mapped={}; finals.forEach((x,i)=>{ mapped[x.i]=this.state.cpQuizAns[i]; });
       const r=this.SS().vtSubmitQuiz(c.vtVideoId,sid,sname,mapped);
       if(!r){ this.toast('The quiz could not be recorded. Please try again.'); return; }
-      this.setState(s=>({cpQuizShown:true,cpLastScore:r.score,storeVer:(s.storeVer||0)+1}));
+      this.setState(s=>({cpQuizShown:true,cpLastScore:r.score,cpQuizPassed:!!r.passed,storeVer:(s.storeVer||0)+1}));
       this.toast(r.passed?('Quiz passed with '+r.score+'%. Continue to the attestation.'):('Score: '+r.score+'%. A score of '+(v.passing_score||80)+'% is required.'));
       return;
     }
-    const sc=this.cpQuizScore(c); this.setState({cpQuizShown:true, cpLastScore:sc});
+    const sc=this.cpQuizScore(c); this.setState({cpQuizShown:true, cpLastScore:sc, cpQuizPassed:sc>=(c.passing||80)});
   }
+  // STF-02: after a failed attempt the staff member starts a NEW attempt with blank answers; answers
+  // are never revealed and "Continue" depends only on a recorded pass.
+  cpRetakeQuiz(){ this.setState({cpQuizAns:{},cpQuizShown:false,cpLastScore:null}); }
   cpToggleAttest(){ this.setState(s=>({cpAttest:!s.cpAttest})); }
   cpNext(){ const c=this.state.onlineCourses.find(x=>x.id===this.state.coursePlayerId)||((this.state.vtCourse&&this.state.vtCourse.id===this.state.coursePlayerId)?this.state.vtCourse:null); if(!c) return; if(this.state.cpStep<c.modules.length-1){ this.setState(s=>({cpStep:s.cpStep+1, cpEmbedAns:null, cpEmbedDone:false, cpQuizAns:{}, cpQuizShown:false, cpWatch:0})); } }
   cpQuizScore(c){ const q=c.modules.find(m=>m.type==='quiz'); if(!q) return 100; let ok=0; q.questions.forEach((qq,i)=>{ if(this.state.cpQuizAns[i]===qq.answer) ok++; }); return Math.round(ok/q.questions.length*100); }
   finishOnlineCourse(){ let c=this.state.onlineCourses.find(x=>x.id===this.state.coursePlayerId); if(!c && this.state.vtCourse && this.state.vtCourse.id===this.state.coursePlayerId) c=this.state.vtCourse; if(!c) return; const cu=this.state.currentUser; if(!cu||cu.role!=='staff'||!cu.staffId){this.toast('Only the signed-in staff member can post an online-course completion.');return;} const sid=cu.staffId;
     if(c.vtVideoId){
       const v=this.SS().vtVideoForStaff(c.vtVideoId,sid)||this.SS().vtVideoById(c.vtVideoId); const _st=this.staffById(sid); const sname=_st?_st.name:sid; const sig=(this.state.cpSig||'').trim();
-      if(v&&v.require_attestation!==false){ if(!this.state.cpAttest){this.toast('Check the attestation box to complete.');return;} if(!sig){this.toast('Type your full name to sign the attestation.');return;} this.SS().vtAttest(v.id,sid,sname,sig); }
+      if(v&&v.require_attestation!==false){ if(!this.state.cpAttest){this.toast('Check the attestation box to complete.');return;} if(!sig){this.toast('Type your full name to sign the attestation.');return;} if(!this.signatureMatchesName(sig,sname)){this.toast('The signature must match your name as it appears on your staff record ('+sname+').');return;} this.SS().vtAttest(v.id,sid,sname,sig); }
       const result=v?this.SS().vtFinalizeCompletion(v.id,sid,sname,{signature:sig,origin:'LMS',portal:'Staff'}):null;
       if(!result||!result.ok){ const ck=(result&&result.checks)||{}; const missing=[]; if(ck.watch===false)missing.push('required video watch percentage'); if(ck.embedded===false)missing.push('embedded questions'); if(ck.quiz===false)missing.push('passing quiz score'); if(ck.attestation===false)missing.push('attestation'); if(ck.updates===false)missing.push('training update acknowledgement'); this.toast('Course cannot be submitted yet'+(missing.length?': '+missing.join(', '):'. Please reopen the course and try again.')); return; }
       const completion=result.completion; const posted=this.vtPostCompletion(v,sid,completion.quiz_score,completion); const _t=new Date(completion.official_completion_at); const _d=(_t.getMonth()+1)+'/'+_t.getDate()+'/'+String(_t.getFullYear()).slice(2); const _prog={...this.state.courseProg}; _prog[this.progKey(c.id,sid)]={status:'Completed',pct:100,done:{},completed:_d}; this.setState({coursePlayerId:null,vtCourse:null,courseProg:_prog}); this.vtClose();
       if(!result.duplicate){ this.logTrainingEvent('complete',c.title,'Video training',sid,{watched:completion.watched_pct,score:completion.quiz_score}); }
       const bits=[]; if(completion.add_to_transcript)bits.push('transcript recorded'); if(completion.issue_certificate)bits.push('certificate available'); if(completion.counts_toward_compliance)bits.push('mandatory compliance updated'); this.toast((result.duplicate?'Completion was already recorded. ':'Completed '+c.title+'. ')+(bits.join(' · ')||'Completion documented.')); if(v.issue_certificate)this.openVideoCert(v.id,sid); return;
     }
+    if((c.modules||[]).some(m=>m.type==='quiz')&&!this.state.cpQuizPassed){ this.toast('Course cannot be submitted yet: passing quiz score'); return; }
     const today=new Date(); const dstr=(today.getMonth()+1)+'/'+today.getDate()+'/'+String(today.getFullYear()).slice(2);
     const longDate=today.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
     // Certificate generates ONLY if the course's content cert is enabled AND the course's
@@ -9917,7 +10004,7 @@ class Component extends DCLogic {
   rptSelectedLocations(){ const multi=Array.isArray(this.state.rptLocFilters)?this.state.rptLocFilters.filter(Boolean):[]; if(multi.length) return [...new Set(multi)]; const legacy=this.state.rptLocFilter; return legacy?[legacy]:[]; }
   toggleRptLocation(value){ if(!value) return; const cur=this.rptSelectedLocations(); const next=cur.includes(value)?cur.filter(v=>v!==value):[...cur,value]; this.setState({rptLocFilters:next,rptLocFilter:'',rptGenerated:false,rptPreviewRows:[],rptMsg:''}); }
   rptLocMatch(staff){ const filters=this.rptSelectedLocations(); if(!filters.length) return true; const raw=(((staff&&staff.loc)||'').trim()); const resolved=this.getStaffResolvedLocation(staff); if(filters.includes('__unmapped')&&raw&&!resolved.locId) return true; return filters.includes(this.canonicalLocName(staff)); }
-  generateReportPreview(){ this.setState({rptError:''}); try{ const rpt=this.state.rptType||'compliance'; const arch=this.complianceExcludedSet(); let staff=this.state.roster.slice(); if(this.state.rptStaffStatus==='active') staff=staff.filter(s=>!arch.has(s.id)); else if(this.state.rptStaffStatus==='archived') staff=staff.filter(s=>arch.has(s.id)); if(this.rptSelectedLocations().length) staff=staff.filter(s=>this.rptLocMatch(s)); if(this.state.rptMgrFilter) staff=staff.filter(s=>s.mgrId===this.state.rptMgrFilter); if(this.state.rptPosFilter) staff=staff.filter(s=>this.rptPosMatch(s,this.state.rptPosFilter)); const _q=this._normSearch(this.state.rptStaffSearch); if(_q) staff=this._filterStaff(staff,_q,'nameId'); const _byId={}; this.state.roster.forEach(r=>_byId[r.id]=r); const _mgrName=(mid)=>((_byId[mid]||{}).name)||''; const _dateOk=(ds)=>{ if(!this.state.rptDateFrom&&!this.state.rptDateTo) return true; if(!ds||ds==='—') return false; const d=new Date(ds); if(isNaN(d)) return true; if(this.state.rptDateFrom&&new Date(this.state.rptDateFrom)>d) return false; if(this.state.rptDateTo&&new Date(this.state.rptDateTo)<d) return false; return true; }; let rows=[]; if(['compliance','missing','expired','upcoming'].includes(rpt)){ const codes=this.state.rptCourseFilter&&this.state.rptCourseFilter.length?this.state.rptCourseFilter:this.reportCourseFilterCodes(rpt); const _legacyNeeded=codes.some(code=>this.isLegacyCourseCode(code)); const _legacyMap={},_legacyTitles={}; if(_legacyNeeded){ this.reportCourseInventory().filter(c=>c.legacy).forEach(c=>_legacyTitles[c.code]=c.title); this.buildCompletionRecords(staff).filter(r=>!r.voided&&this.isLegacyCourseCode(r.code,r)).forEach(r=>{const k=String(r.staffId)+'|'+String(r.code||'').toUpperCase(),cur=_legacyMap[k];if(!cur||this.compDateVal(r.date)>this.compDateVal(cur.date))_legacyMap[k]=r;}); } staff.forEach(s=>{ const _add=this.locAddedCodesFor(s); const _codes=_add.length?codes.concat(_add.filter(c=>codes.indexOf(c)<0&&!this.isLegacyCourseCode(c))):codes; _codes.forEach(code=>{ const _legacy=this.isLegacyCourseCode(code); if(!_legacy&&this.locReqSuppressed(s,code)) return; let st,comp,_exp,src='',note=''; if(_legacy){ const lr=_legacyMap[String(s.id)+'|'+String(code).toUpperCase()]||null; comp=lr?(lr.date||''):''; _exp=lr&&lr.expires&&!lr.noExpire?lr.expires:'No expiration'; st=lr?'g':'w'; if(lr&&_exp&&_exp!=='No expiration'){ const ev=this.compDateVal(_exp),now=Date.now(),days=ev?Math.ceil((ev-now)/86400000):null; if(days!=null){st=days<0?'r':(days<=30?'o':(days<=90?'y':'g'));} } src=lr?(lr.displaySource||lr.source||'Legacy completion'):''; note='Legacy Course · report-only historical tracking'; } else { st=this.effStatus(s,code); comp=(s.dt&&s.dt[code])||''; _exp=this.expirationFor(s,code,comp); } if(rpt==='missing'&&(st!=='r'||!!comp)) return; if(rpt==='expired'&&(st!=='r'||!comp)) return; if(rpt==='upcoming'&&st!=='y'&&st!=='o') return; const _stF=this.state.rptStatusFilter||[]; if(_stF.length&&!_stF.includes(st)) return; const _dchk=this.state.rptDateType==='expiration'?_exp:(this.state.rptDateType==='hire'?(s.h||''):comp); if(!_dateOk(_dchk)) return; rows.push({name:s.name,id:s.id,location:this.canonicalLocName(s)||'',rawLocation:s.loc||'',position:s.pos||'',manager:_mgrName(s.mgrId),hired:s.h||'',status:st,course:_legacy?((_legacyTitles[String(code).toUpperCase()]||this.courseLabel(code))+' (Legacy Course)'):this.courseLabel(code),completion:comp||'—',expiration:_exp||'—',source:src,notes:note}); }); }); } else if(rpt==='roster'){ staff.forEach(s=>{ rows.push({name:s.name,id:s.id,location:this.canonicalLocName(s)||'',rawLocation:s.loc||'',position:s.pos||'',manager:_mgrName(s.mgrId),hired:s.h||'',status:arch.has(s.id)?'Archived':'Active',course:'',completion:'',expiration:'',source:'',notes:''}); }); } else if(rpt==='change_history'){ this.staffChangeHistoryPrimary(this.state.docs.staffChangeHistory||[]).slice().sort((a,b)=>(b.t||0)-(a.t||0)).forEach(e=>{ const cn=e.changes?e.changes.map(c=>c.field+': “'+c.from+'” → “'+c.to+'”').join('; '):(e.notes||''); rows.push({name:e.name||e.staffId,id:e.staffId,location:this.canonicalLocName(e)||'',rawLocation:e.loc||'',position:e.pos||'',manager:_mgrName(e.mgrId),hired:e.h||'',status:e.action,course:'',completion:e.ts||'',expiration:'',source:(e.source||'')+(e.batchName?' · '+e.batchName:''),notes:cn}); }); } else if(rpt==='certificates'){ const _cs=new Set(staff.map(s=>s.id)); const _inclV=this.state.rptInclVoided===true; const _crecs=this.buildCompletionRecords().filter(r=>_cs.has(r.staffId) && r.certGenerated && (_inclV||!r.voided)); const _ccodes=this.state.rptCourseFilter&&this.state.rptCourseFilter.length?this.state.rptCourseFilter:this.reportCourseFilterCodes('certificates'); _crecs.forEach(r=>{ if(_ccodes&&!_ccodes.includes(String(r.code||'').toUpperCase())) return; const s=_byId[r.staffId]||{}; const _dchk=this.state.rptDateType==='expiration'?r.expires:(this.state.rptDateType==='hire'?(s.h||''):r.date); if(!_dateOk(_dchk)) return; const _stF=this.state.rptStatusFilter||[]; const _lt=r.voided?'r':(r.status==='Expired'?'r':'g'); if(_stF.length&&!_stF.includes(_lt)) return; rows.push({name:r.staffName,id:r.staffId,location:r.locName||'',rawLocation:r.rawLoc||'',position:s.pos||'',manager:_mgrName(s.mgrId),hired:s.h||'',status:_lt,course:this.courseLabel(r.code)+' ('+r.code+')',completion:r.date||'',expiration:r.noExpire?'No expiration':(r.expires||''),source:r.displaySource||'',notes:(r.voided?'VOIDED · ':'')+(r.certType||'Certificate of Completion')+' · '+(r.certVisibility||'staff')+'-visible'+(r.certId?(' · '+r.certId):'')}); }); } else if(rpt==='registrations'){ this.state.requests.forEach(req=>{ if(req.status==='denied') return; const s=_byId[req.staffId]||{}; if(!this.rptLocMatch(s)) return; const sess=this.state.sessions.find(x=>x.id===req.sessionId)||{}; rows.push({name:s.name||req.staffId,id:req.staffId,location:this.canonicalLocName(s)||'',rawLocation:s.loc||'',position:s.pos||'',manager:_mgrName(s.mgrId),hired:s.h||'',status:req.status,course:this.courseLabel(req.code),completion:sess.date||'—',expiration:'',source:(sess.where||'')+(sess.instructor?' · '+sess.instructor:''),notes:req.status}); }); } else if(rpt==='attendance'){ this.state.sessions.forEach(sess=>{ (sess.roster||[]).forEach(r=>{ const s=_byId[r.staffId]||{}; if(!this.rptLocMatch(s)) return; rows.push({name:s.name||r.staffId,id:r.staffId,location:this.canonicalLocName(s)||'',rawLocation:s.loc||'',position:s.pos||'',manager:_mgrName(s.mgrId),hired:s.h||'',status:r.waitlist?'Waitlisted':((sess.att&&sess.att[r.staffId])||'Registered'),course:sess.title||sess.code,completion:sess.date||'—',expiration:'',source:sess.where||'',notes:(sess.pass&&sess.pass[r.staffId])||''}); }); }); } else if(rpt==='ext_certs'){ (this.state.docs.extCerts||[]).forEach(d=>{ const s=_byId[d.staffId]||{}; if(!this.rptLocMatch(s)) return; rows.push({name:d.staffName||d.staffId,id:d.staffId,location:this.canonicalLocName(s)||'',rawLocation:s.loc||'',position:s.pos||'',manager:_mgrName(s.mgrId),hired:s.h||'',status:d.status||'pending',course:d.displayTitle||d.course,completion:d.date||'—',expiration:d.expires||'—',source:d.fileName||'',notes:d.approvedBy?'Approved by '+d.approvedBy:''}); }); } else if(rpt==='audit'){ [...(this.state.auditLog||[])].reverse().slice(0,500).forEach(e=>{ rows.push({name:e.actor||'System',id:'',location:'',position:'',manager:'',hired:'',status:e.sev||'Info',course:e.action||'',completion:e.ts||'',expiration:'',source:e.relatedId||'',notes:[e.prev&&('Prev: '+e.prev),e.next&&('Next: '+e.next),e.notes].filter(Boolean).join(' · ')}); }); } const _gb=this.state.rptGroupBy||'location'; const _sb=this.state.rptSortBy||'name'; const _G=(r)=>({location:r.location,manager:r.manager,course:r.course,status:r.status}[_gb]||r.location||''); const _S=(r)=>({name:r.name,location:r.location,course:r.course,status:r.status,completion:r.completion,expiration:r.expiration}[_sb]||r.name||''); rows.sort((a,b)=>{ const ga=_G(a),gb=_G(b); if(ga!==gb) return (ga||'').localeCompare(gb||''); return (_S(a)||'').localeCompare(_S(b)||''); }); this.setState({rptPreviewRows:rows,rptGenerated:true,rptMsg:rows.length.toLocaleString()+' row(s) matched.'}); this.logAudit('Report generated',{target:(this.RPT_TYPE_LABELS||{})[rpt]||rpt,next:rows.length+' rows',notes:'loc='+(this.rptSelectedLocations().length?this.rptSelectedLocations().join('|'):'all')+(staff.some(s=>((s.loc||'').trim())&&!this.getStaffResolvedLocation(s).locId)?' · includes UNMAPPED Empeon locations (needs review)':'')+(this.state.rptInclInactiveLoc?' · incl. inactive/archived locations':''),sev:'Info'}); }catch(_e){ const _msg=String((_e&&_e.message)||_e); this.setState({rptPreviewRows:[], rptGenerated:true, rptError:_msg}); if(this.logAudit)this.logAudit('Report generation failed',{target:(this.state.rptType||'compliance'),notes:_msg,sev:'Critical'}); if(this.toast)this.toast('Report could not be generated — see the error detail above.'); } }
+  generateReportPreview(){ this.setState({rptError:''}); try{ const rpt=this.state.rptType||'compliance'; const arch=this.complianceExcludedSet(); let staff=this.state.roster.slice(); if(this.state.rptStaffStatus==='active') staff=staff.filter(s=>!arch.has(String(s.id))&&this.isActiveStaff(s)); else if(this.state.rptStaffStatus==='archived') staff=staff.filter(s=>arch.has(s.id)); if(this.rptSelectedLocations().length) staff=staff.filter(s=>this.rptLocMatch(s)); if(this.state.rptMgrFilter) staff=staff.filter(s=>s.mgrId===this.state.rptMgrFilter); if(this.state.rptPosFilter) staff=staff.filter(s=>this.rptPosMatch(s,this.state.rptPosFilter)); const _q=this._normSearch(this.state.rptStaffSearch); if(_q) staff=this._filterStaff(staff,_q,'nameId'); const _byId={}; this.state.roster.forEach(r=>_byId[r.id]=r); const _mgrName=(mid)=>((_byId[mid]||{}).name)||''; const _dateOk=(ds)=>{ if(!this.state.rptDateFrom&&!this.state.rptDateTo) return true; if(!ds||ds==='—') return false; const d=new Date(ds); if(isNaN(d)) return true; if(this.state.rptDateFrom&&new Date(this.state.rptDateFrom)>d) return false; if(this.state.rptDateTo&&new Date(this.state.rptDateTo)<d) return false; return true; }; let rows=[]; if(['compliance','missing','expired','upcoming'].includes(rpt)){ const codes=this.state.rptCourseFilter&&this.state.rptCourseFilter.length?this.state.rptCourseFilter:this.reportCourseFilterCodes(rpt); const _legacyNeeded=codes.some(code=>this.isLegacyCourseCode(code)); const _legacyMap={},_legacyTitles={}; if(_legacyNeeded){ this.reportCourseInventory().filter(c=>c.legacy).forEach(c=>_legacyTitles[c.code]=c.title); this.buildCompletionRecords(staff).filter(r=>!r.voided&&this.isLegacyCourseCode(r.code,r)).forEach(r=>{const k=String(r.staffId)+'|'+String(r.code||'').toUpperCase(),cur=_legacyMap[k];if(!cur||this.compDateVal(r.date)>this.compDateVal(cur.date))_legacyMap[k]=r;}); } staff.forEach(s=>{ const _add=this.locAddedCodesFor(s); const _codes=_add.length?codes.concat(_add.filter(c=>codes.indexOf(c)<0&&!this.isLegacyCourseCode(c))):codes; _codes.forEach(code=>{ const _legacy=this.isLegacyCourseCode(code); if(!_legacy&&this.locReqSuppressed(s,code)) return; let st,comp,_exp,src='',note=''; if(_legacy){ const lr=_legacyMap[String(s.id)+'|'+String(code).toUpperCase()]||null; comp=lr?(lr.date||''):''; _exp=lr&&lr.expires&&!lr.noExpire?lr.expires:'No expiration'; st=lr?'g':'w'; if(lr&&_exp&&_exp!=='No expiration'){ const ev=this.compDateVal(_exp),now=Date.now(),days=ev?Math.ceil((ev-now)/86400000):null; if(days!=null){st=days<0?'r':(days<=30?'o':(days<=90?'y':'g'));} } src=lr?(lr.displaySource||lr.source||'Legacy completion'):''; note='Legacy Course · report-only historical tracking'; } else { st=this.effStatus(s,code); comp=(s.dt&&s.dt[code])||''; _exp=this.expirationFor(s,code,comp); } if(rpt==='missing'&&(st!=='r'||!!comp)) return; if(rpt==='expired'&&(st!=='r'||!comp)) return; if(rpt==='upcoming'&&st!=='y'&&st!=='o') return; const _stF=this.state.rptStatusFilter||[]; if(_stF.length&&!_stF.includes(st)) return; const _dchk=this.state.rptDateType==='expiration'?_exp:(this.state.rptDateType==='hire'?(s.h||''):comp); if(!_dateOk(_dchk)) return; rows.push({name:s.name,id:s.id,location:this.canonicalLocName(s)||'',rawLocation:s.loc||'',position:s.pos||'',manager:_mgrName(s.mgrId),hired:s.h||'',status:st,course:_legacy?((_legacyTitles[String(code).toUpperCase()]||this.courseLabel(code))+' (Legacy Course)'):this.courseLabel(code),completion:comp||'—',expiration:_exp||'—',source:src,notes:note}); }); }); } else if(rpt==='roster'){ staff.forEach(s=>{ rows.push({name:s.name,id:s.id,location:this.canonicalLocName(s)||'',rawLocation:s.loc||'',position:s.pos||'',manager:_mgrName(s.mgrId),hired:s.h||'',status:arch.has(s.id)?'Archived':'Active',course:'',completion:'',expiration:'',source:'',notes:''}); }); } else if(rpt==='change_history'){ this.staffChangeHistoryPrimary(this.state.docs.staffChangeHistory||[]).slice().sort((a,b)=>(b.t||0)-(a.t||0)).forEach(e=>{ const cn=e.changes?e.changes.map(c=>c.field+': “'+c.from+'” → “'+c.to+'”').join('; '):(e.notes||''); rows.push({name:e.name||e.staffId,id:e.staffId,location:this.canonicalLocName(e)||'',rawLocation:e.loc||'',position:e.pos||'',manager:_mgrName(e.mgrId),hired:e.h||'',status:e.action,course:'',completion:e.ts||'',expiration:'',source:(e.source||'')+(e.batchName?' · '+e.batchName:''),notes:cn}); }); } else if(rpt==='certificates'){ const _cs=new Set(staff.map(s=>s.id)); const _inclV=this.state.rptInclVoided===true; const _crecs=this.buildCompletionRecords().filter(r=>_cs.has(r.staffId) && r.certGenerated && (_inclV||!r.voided)); const _ccodes=this.state.rptCourseFilter&&this.state.rptCourseFilter.length?this.state.rptCourseFilter:this.reportCourseFilterCodes('certificates'); _crecs.forEach(r=>{ if(_ccodes&&!_ccodes.includes(String(r.code||'').toUpperCase())) return; const s=_byId[r.staffId]||{}; const _dchk=this.state.rptDateType==='expiration'?r.expires:(this.state.rptDateType==='hire'?(s.h||''):r.date); if(!_dateOk(_dchk)) return; const _stF=this.state.rptStatusFilter||[]; const _lt=r.voided?'r':(r.status==='Expired'?'r':'g'); if(_stF.length&&!_stF.includes(_lt)) return; rows.push({name:r.staffName,id:r.staffId,location:r.locName||'',rawLocation:r.rawLoc||'',position:s.pos||'',manager:_mgrName(s.mgrId),hired:s.h||'',status:_lt,course:this.courseLabel(r.code)+' ('+r.code+')',completion:r.date||'',expiration:r.noExpire?'No expiration':(r.expires||''),source:r.displaySource||'',notes:(r.voided?'VOIDED · ':'')+(r.certType||'Certificate of Completion')+' · '+(r.certVisibility||'staff')+'-visible'+(r.certId?(' · '+r.certId):'')}); }); } else if(rpt==='registrations'){ this.state.requests.forEach(req=>{ if(req.status==='denied') return; const s=_byId[req.staffId]||{}; if(!this.rptLocMatch(s)) return; const sess=this.state.sessions.find(x=>x.id===req.sessionId)||{}; rows.push({name:s.name||req.staffId,id:req.staffId,location:this.canonicalLocName(s)||'',rawLocation:s.loc||'',position:s.pos||'',manager:_mgrName(s.mgrId),hired:s.h||'',status:req.status,course:this.courseLabel(req.code),completion:sess.date||'—',expiration:'',source:(sess.where||'')+(sess.instructor?' · '+sess.instructor:''),notes:req.status}); }); } else if(rpt==='attendance'){ this.state.sessions.forEach(sess=>{ (sess.roster||[]).forEach(r=>{ const s=_byId[r.staffId]||{}; if(!this.rptLocMatch(s)) return; rows.push({name:s.name||r.staffId,id:r.staffId,location:this.canonicalLocName(s)||'',rawLocation:s.loc||'',position:s.pos||'',manager:_mgrName(s.mgrId),hired:s.h||'',status:r.waitlist?'Waitlisted':((sess.att&&sess.att[r.staffId])||'Registered'),course:sess.title||sess.code,completion:sess.date||'—',expiration:'',source:sess.where||'',notes:(sess.pass&&sess.pass[r.staffId])||''}); }); }); } else if(rpt==='ext_certs'){ (this.state.docs.extCerts||[]).forEach(d=>{ const s=_byId[d.staffId]||{}; if(!this.rptLocMatch(s)) return; rows.push({name:d.staffName||d.staffId,id:d.staffId,location:this.canonicalLocName(s)||'',rawLocation:s.loc||'',position:s.pos||'',manager:_mgrName(s.mgrId),hired:s.h||'',status:d.status||'pending',course:d.displayTitle||d.course,completion:d.date||'—',expiration:d.expires||'—',source:d.fileName||'',notes:d.approvedBy?'Approved by '+d.approvedBy:''}); }); } else if(rpt==='audit'){ [...(this.state.auditLog||[])].reverse().slice(0,500).forEach(e=>{ rows.push({name:e.actor||'System',id:'',location:'',position:'',manager:'',hired:'',status:e.sev||'Info',course:e.action||'',completion:e.ts||'',expiration:'',source:e.relatedId||'',notes:[e.prev&&('Prev: '+e.prev),e.next&&('Next: '+e.next),e.notes].filter(Boolean).join(' · ')}); }); } const _gb=this.state.rptGroupBy||'location'; const _sb=this.state.rptSortBy||'name'; const _G=(r)=>({location:r.location,manager:r.manager,course:r.course,status:r.status}[_gb]||r.location||''); const _S=(r)=>({name:r.name,location:r.location,course:r.course,status:r.status,completion:r.completion,expiration:r.expiration}[_sb]||r.name||''); rows.sort((a,b)=>{ const ga=_G(a),gb=_G(b); if(ga!==gb) return (ga||'').localeCompare(gb||''); return (_S(a)||'').localeCompare(_S(b)||''); }); this.setState({rptPreviewRows:rows,rptGenerated:true,rptMsg:rows.length.toLocaleString()+' row(s) matched.'}); this.logAudit('Report generated',{target:(this.RPT_TYPE_LABELS||{})[rpt]||rpt,next:rows.length+' rows',notes:'loc='+(this.rptSelectedLocations().length?this.rptSelectedLocations().join('|'):'all')+(staff.some(s=>((s.loc||'').trim())&&!this.getStaffResolvedLocation(s).locId)?' · includes UNMAPPED Empeon locations (needs review)':'')+(this.state.rptInclInactiveLoc?' · incl. inactive/archived locations':''),sev:'Info'}); }catch(_e){ const _msg=String((_e&&_e.message)||_e); this.setState({rptPreviewRows:[], rptGenerated:true, rptError:_msg}); if(this.logAudit)this.logAudit('Report generation failed',{target:(this.state.rptType||'compliance'),notes:_msg,sev:'Critical'}); if(this.toast)this.toast('Report could not be generated — see the error detail above.'); } }
   reportPrintStatus(v){ return ({g:'Complete / Compliant',r:'Noncompliant · Expired / Missing',y:'Compliant · Due Soon (≤90 days)',o:'Compliant · Due Very Soon (≤30 days)',w:'Compliant · Not Yet Required / N/A',Active:'Active',Archived:'Archived'}[v]||v||'—'); }
   reportPrintScope(){
     const s=this.state, out=[];
@@ -9952,7 +10039,7 @@ class Component extends DCLogic {
     const meta=rows.length.toLocaleString()+' record'+(rows.length===1?'':'s')+' · Generated by '+actor+' · '+generated.toLocaleString('en-US');
     const scope=this.reportPrintScope();
     const green=rows.filter(r=>r.status==='g').length, red=rows.filter(r=>r.status==='r').length, due=rows.filter(r=>r.status==='y'||r.status==='o').length, white=rows.filter(r=>r.status==='w').length;
-    const compliant=green+due+white, denom=compliant+red, pct=denom?Math.round(compliant/denom*100):null;
+    const pct=this.complianceLetterSummary(rows.map(r=>r.status)).pct;
     const cards=[['Records',rows.length.toLocaleString(),'#152A4D'], ...(pct===null?[]:[['Compliant',pct+'%','#1F8A4C']]), ...(green?[['Complete',green.toLocaleString(),'#1F8A4C']]:[]), ...(due?[['Due Soon',due.toLocaleString(),'#B96300']]:[]), ...(red?[['Expired / Missing',red.toLocaleString(),'#B42318']]:[]), ...(white?[['White / Not Yet Required',white.toLocaleString(),'#64748B']]:[])];
     const esc=v=>this.esc(v==null?'':String(v));
     const scopeHtml=scope.map(x=>'<span class="rpt-filter-chip" style="display:inline-block;border:1px solid #D7DFEE;background:#F6F8FC;border-radius:999px;padding:4px 9px;margin:0 5px 5px 0;font-size:7.5pt;color:#334155"><b style="color:#1F3864">'+esc(x.label)+':</b> '+esc(x.value)+'</span>').join('');
@@ -9990,10 +10077,9 @@ class Component extends DCLogic {
     if(!staff.length){ this.toast('No staff match the current compliance-report filters.'); return; }
     const cols=this._orderFor(staff).filter(c=>allCols.includes(c)&&staff.some(s=>this.requiredFor(s,c)||(s.dt&&s.dt[c])));
     if(!cols.length){ this.toast('No course columns are available for the selected staff.'); return; }
-    const due=staff.filter(r=>cols.some(c=>['o','y'].includes(this.effStatus(r,c)))).length;
-    const overdue=staff.filter(r=>cols.some(c=>this.effStatus(r,c)==='r')).length;
-    let total=0,compliant=0; staff.forEach(r=>cols.forEach(c=>{const x=this.effStatus(r,c);if(x==='r'){total++;}else if(['g','y','o','w','info'].includes(x)){total++;compliant++;}}));
-    const pct=total?Math.round(compliant/total*100):0;
+    // Same aggregation as the on-screen Color Report (_recordsView) so the printout matches it.
+    let due=0; const _sum=this.complianceSummary(staff,this.MATRIX_COLS,(r,cells)=>{ if(cells.some(x=>x.l==='o'||x.l==='y')) due++; });
+    const overdue=_sum.redStaff, pct=_sum.pct;
     const generated=new Date(), actor=(this.state.currentUser&&this.state.currentUser.name)||'Administrator';
     const esc=v=>this.esc(v==null?'':String(v));
     const scope=[['Location',this.state.aLoc||'All authorized locations'],['Staff search',this.state.aSearch||'None'],['Staff records',staff.length.toLocaleString()],['Archived staff',this.state.showArchived?'Included':'Excluded']];
@@ -10129,7 +10215,51 @@ class Component extends DCLogic {
   }
   runScheduleNow(id){ const sch=(this.state.docs.scheduledReports||[]).find(s=>s.id===id); if(!sch) return; const arch=new Set(this.state.docs.archived||[]); let staff=this.state.roster.slice(); if(sch.staffStatus==='active') staff=staff.filter(s=>!arch.has(s.id)); else if(sch.staffStatus==='archived') staff=staff.filter(s=>arch.has(s.id)); const _schLocs=Array.isArray(sch.locFilters)?sch.locFilters.filter(Boolean):(sch.locFilter?[sch.locFilter]:[]); if(_schLocs.length) staff=staff.filter(s=>{const raw=((s.loc||'').trim());const resolved=this.getStaffResolvedLocation(s);if(_schLocs.includes('__unmapped')&&raw&&!resolved.locId)return true;return _schLocs.includes(this.canonicalLocName(s));}); if(sch.mgrFilter) staff=staff.filter(s=>s.mgrId===sch.mgrFilter); if(sch.posFilter) staff=staff.filter(s=>this.rptPosMatch(s,sch.posFilter)); const _byId={}; this.state.roster.forEach(r=>_byId[r.id]=r); const rpt=sch.reportType||'compliance'; let rows=[]; if(['compliance','missing','expired','upcoming'].includes(rpt)){ const codes=sch.courseFilter&&sch.courseFilter.length?sch.courseFilter:this.rptComplianceCodes(); const _stF=sch.statusFilter||[]; staff.forEach(s=>{ const _add=this.locAddedCodesFor(s); const _codes=_add.length?codes.concat(_add.filter(c=>codes.indexOf(c)<0)):codes; _codes.forEach(code=>{ if(this.locReqSuppressed(s,code)) return; const st=this.effStatus(s,code); const comp=(s.dt&&s.dt[code])||''; if(rpt==='missing'&&(st!=='r'||!!comp)) return; if(rpt==='expired'&&(st!=='r'||!comp)) return; if(rpt==='upcoming'&&st!=='y'&&st!=='o') return; if(_stF.length&&!_stF.includes(st)) return; rows.push({name:s.name,id:s.id,location:this.canonicalLocName(s)||'',rawLocation:s.loc||'',status:st,course:this.courseLabel(code)}); }); }); } else if(rpt==='roster'){ staff.forEach(s=>rows.push({name:s.name,id:s.id,location:this.canonicalLocName(s)||'',rawLocation:s.loc||'',status:arch.has(s.id)?'Archived':'Active'})); } else if(rpt==='change_history'){ this.staffChangeHistoryPrimary(this.state.docs.staffChangeHistory||[]).forEach(e=>rows.push({name:e.name||e.staffId,id:e.staffId,status:e.action,completion:e.ts||''})); } else if(rpt==='registrations'){ const _eligibleStaff=new Set(staff.map(s=>s.id)); this.state.requests.forEach(req=>{ if(req.status==='denied'||!_eligibleStaff.has(req.staffId)) return; const s=_byId[req.staffId]||{}; rows.push({name:s.name||req.staffId,id:req.staffId,location:this.canonicalLocName(s)||'',rawLocation:s.loc||'',status:req.status,course:this.courseLabel(req.code)}); }); } else { staff.forEach(s=>rows.push({name:s.name,id:s.id,location:this.canonicalLocName(s)||'',rawLocation:s.loc||'',status:arch.has(s.id)?'Archived':'Active'})); } const actor=(this.state.currentUser&&this.state.currentUser.name)||'System'; const ts=new Date().toLocaleDateString('en-US')+' '+new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}); const entry={id:'dsp'+Date.now(),scheduleId:id,reportName:sch.reportName,reportType:sch.reportType,recipients:sch.recipients||'',generatedAt:ts,generatedBy:actor,rowCount:rows.length,deliveryFormat:(sch.deliveryFormat==='csv'?'xlsx':(sch.deliveryFormat==='csv_summary'?'xlsx_summary':sch.deliveryFormat))||'xlsx',status:'Queued — email integration required in production',filterSummary:'type='+sch.reportType+' loc='+(_schLocs.length?_schLocs.join('|'):'all')+' status='+(sch.staffStatus||'active'),workbookFileName:'HASC_'+sch.reportName.replace(/\s+/g,'_')+'_'+new Date().toISOString().slice(0,10)+'.xlsx'}; const _schs=(this.state.docs.scheduledReports||[]).map(s=>s.id===id?{...s,lastRunAt:ts,lastStatus:'Queued — '+rows.length+' rows',nextRunAt:''}:s); const docs={...this.state.docs,scheduledReports:_schs,reportDispatchLog:[entry,...(this.state.docs.reportDispatchLog||[])]}; this.saveDocs(docs); this._mirrorToService('sched.run', S=>S.runScheduledReportNow(id,(this.state.currentUser&&this.state.currentUser.name)||'Admin')); this.logAudit('Scheduled report run now',{target:sch.reportName,next:rows.length+' rows',notes:'Queued — email integration required',sev:'Info'}); this.toast('Generated '+rows.length+' row(s). Queued — email integration required in production.'); }
     qaResults(){ return this._memo('qaResults', this._cmpDeps().concat([this.state.sessions,this.state.requests,this.state.onlineCourses,this.state.instructors,this.state.storeVer]), ()=>this._qaResultsCompute()); }
-    _qaResultsCompute(){ return [{name:'QA suite not included in this build', expected:'Full check suite ships in the development build', pass:'#64748B', actual:'Load the dev build to run the suite.', help:'', badge:'N/A', badgeBg:'#EEF1F8'}]; }
+    // In-app outcome checks (QA-02). Every scenario runs on CLONED staff records with synthetic IDs
+    // and on copies of the roster/docs passed to the pure replay helpers, so nothing is mutated or
+    // saved. Mirrors tools/tests/compliance.test.mjs + rules.test.mjs.
+    _qaResultsCompute(){
+      const out=[]; const add=(name,expected,ok,actual,help)=>out.push({name,expected,actual:String(actual==null?'':actual),help:help||'',pass:ok?'#1F9D55':'#D93025',badge:ok?'PASS':'FAIL',badgeBg:ok?'#E4F6EB':'#FCE4E1'});
+      const run=(name,expected,fn,help)=>{ try{ const r=fn(); add(name,expected,!!r.ok,r.actual,help); }catch(e){ add(name,expected,false,'Error: '+((e&&e.message)||e),help); } };
+      let seq=0; const clone=(st,patch)=>{ const c=JSON.parse(JSON.stringify(st)); c.id='QA-'+(++seq); c.dt=c.dt||{}; c.rec=c.rec||{}; c.expOverride={}; c.baseDt={}; return Object.assign(c,patch||{}); };
+      const t0=this.todayDate(); t0.setHours(0,0,0,0); const ago=(n)=>{ const d=new Date(t0); d.setDate(d.getDate()-n); return this.formatMDY(d); };
+      const active=this.activeStaffList(); const find=(p)=>active.find(p);
+      const setDate=(st,code,d)=>{ st.dt[code]=d; st.rec[code]='g'; delete st.expOverride[code]; return st; };
+      const cprStaff=find(s=>this.requiredFor(s,'CPR')&&!this.isSDCH(s)&&this.effInterval(s,'CPR'));
+      if(cprStaff){ const iv=this.effInterval(cprStaff,'CPR');
+        run('Compliance: CPR completed 10 days ago is current','g', ()=>{ const s=setDate(clone(cprStaff),'CPR',ago(10)); const l=this.effStatus(s,'CPR'); return {ok:l==='g',actual:l}; });
+        run('Compliance: CPR past its renewal interval is overdue','r', ()=>{ const s=setDate(clone(cprStaff),'CPR',ago(iv+5)); const l=this.effStatus(s,'CPR'); return {ok:l==='r',actual:l}; });
+        run('Compliance: CPR expiring within 30 days is due very soon','o', ()=>{ const s=setDate(clone(cprStaff),'CPR',ago(iv-20)); const l=this.effStatus(s,'CPR'); return {ok:l==='o',actual:l}; });
+        run('Compliance: CPR expiring within 90 days is due soon','y', ()=>{ const s=setDate(clone(cprStaff),'CPR',ago(iv-60)); const l=this.effStatus(s,'CPR'); return {ok:l==='y',actual:l}; });
+        run('Compliance: expiration date equals completion + renewal interval','completion + '+iv+' days', ()=>{ const s=setDate(clone(cprStaff),'CPR',ago(10)); const e=this.parseMDY(this.expirationFor(s,'CPR',s.dt.CPR)); const want=new Date(t0); want.setDate(want.getDate()-10+iv); return {ok:!!e&&Math.abs(e-want)<=86400000*2,actual:this.expirationFor(s,'CPR',s.dt.CPR)}; });
+        run('Compliance: stale manual override does not survive a newer completion','g after renewal', ()=>{ const s=clone(cprStaff); s.dt.CPR=ago(iv+30); s.rec.CPR='g'; s.expOverride.CPR=ago(iv); const docs={completions:[{staffId:s.id,code:'CPR',complianceCode:'CPR',date:ago(3)}],completionVoids:[]}; const r=this.applyCompletionsToRoster([s],docs)[0]; const l=this.effStatus(r,'CPR'); return {ok:l==='g'&&!(r.expOverride||{}).CPR&&r.dt.CPR===ago(3),actual:l+' · dt '+r.dt.CPR+' · override '+((r.expOverride||{}).CPR||'none')}; });
+        run('Compliance: backfilled older completion never lowers a newer one','dt unchanged', ()=>{ const s=setDate(clone(cprStaff),'CPR',ago(10)); const docs={completions:[{staffId:s.id,code:'CPR',complianceCode:'CPR',date:ago(900)}],completionVoids:[]}; const r=this.applyCompletionsToRoster([s],docs)[0]; return {ok:r.dt.CPR===ago(10)&&this.effStatus(r,'CPR')==='g',actual:r.dt.CPR}; });
+        run('Compliance: future-dated completion is not counted','dt unchanged', ()=>{ const s=setDate(clone(cprStaff),'CPR',ago(iv+5)); const f=new Date(t0); f.setDate(f.getDate()+30); const docs={completions:[{staffId:s.id,code:'CPR',complianceCode:'CPR',date:this.formatMDY(f)}],completionVoids:[]}; const r=this.applyCompletionsToRoster([s],docs)[0]; return {ok:r.dt.CPR===ago(iv+5)&&this.effStatus(r,'CPR')==='r',actual:r.dt.CPR+' · '+this.effStatus(r,'CPR')}; });
+        run('Compliance: voiding the newer completion falls back to the prior date','prior date restored', ()=>{ const s=setDate(clone(cprStaff),'CPR',ago(400)); const docs={completions:[{staffId:s.id,code:'CPR',complianceCode:'CPR',date:ago(5)}],completionVoids:[]}; const r1=this.applyCompletionsToRoster([s],docs)[0]; const vd={...docs,completionVoids:[{key:this.completionKey(s.id,'CPR',ago(5)),staffId:s.id,code:'CPR'}]}; const r2=this.applyVoidsToRoster([r1],vd)[0]; return {ok:r1.dt.CPR===ago(5)&&r2.dt.CPR===ago(400),actual:r1.dt.CPR+' → '+r2.dt.CPR}; });
+      } else add('Compliance: CPR scenarios','an active staff member who requires CPR',false,'No fixture found');
+      const missStaff=find(s=>this.requiredFor(s,'EPP')&&!this.isSDCH(s));
+      if(missStaff&&this.missingRequiredEnforced()){
+        run('Compliance: required course never completed, hired years ago, is overdue','r', ()=>{ const s=clone(missStaff,{h:ago(3*365)}); delete s.dt.EPP; s.rec.EPP='w'; const l=this.effStatus(s,'EPP'); return {ok:l==='r',actual:l}; });
+        run('Compliance: required course never completed by a new hire is not overdue','not r', ()=>{ const s=clone(missStaff,{h:ago(3)}); delete s.dt.EPP; s.rec.EPP='w'; const l=this.effStatus(s,'EPP'); return {ok:l!=='r',actual:l}; });
+      }
+      const nonCore=find(s=>!this.requiredFor(s,'RNORI')&&!(s.dt&&s.dt.RNORI));
+      if(nonCore) run('Compliance: a course that is not required is excluded from the %','na / info, not counted', ()=>{ const s=clone(nonCore); s.dt.RNORI=ago(10); const l=this.effStatus(s,'RNORI'); return {ok:(l==='info'||l==='na')&&this.complianceLetterMet(l)===null,actual:l}; });
+      const sdch=find(s=>this.isSDCH(s)&&this.requiredFor(s,'SDCH1'));
+      if(sdch) run('Compliance: full Orientation 1/2/3 satisfies SDCH 1 and 2 by equivalency','g', ()=>{ const s=clone(sdch); ['O1','O2','O3'].forEach(c=>setDate(s,c,ago(100))); delete s.dt.SDCH1; delete s.dt.SDCH2; s.rec.SDCH1='w'; s.rec.SDCH2='w'; const a=this.effStatus(s,'SDCH1'), b=this.effStatus(s,'SDCH2'); return {ok:a==='g'&&b==='g',actual:a+'/'+b}; });
+      const artStaff=find(s=>!this.isSDCH(s)&&this.requiredFor(s,'ART')&&['O1','O2','O3'].some(c=>this.requiredFor(s,c)));
+      if(artStaff) run('Compliance: refresher orientation does not move the initial ART due date','due = first pathway completion + 1 year', ()=>{ const s=clone(artStaff); delete s.dt.ART; s.rec.ART='w'; const codes=['O1','O2','O3'].filter(c=>this.requiredFor(s,c)); codes.forEach(c=>{ setDate(s,c,ago(20)); s.baseDt[c]=ago(340); }); const x=this.artInitialDueInfo(s); const want=this.addYearsDate(this.parseMDY(ago(340)),1); return {ok:!!x.ready&&this.formatMDY(x.dueDate)===this.formatMDY(want),actual:x.ready?x.dueMDY:'not ready'}; });
+      run('Aggregation: dashboard % and staff-compliant % come from the shared summary','equal', ()=>{ const a=this._agencyAgg(this.MATRIX_COLS), s=this.complianceSummary(this.activeStaffList(),this.MATRIX_COLS); return {ok:a.aPct===s.pct&&a.aStaffPct===s.staffPct&&a.aRed===s.unmet,actual:a.aPct+'% / '+s.pct+'% · staff '+a.aStaffPct+'% / '+s.staffPct+'%'}; });
+      run('Aggregation: Location Rankings agency % matches the dashboard %','equal', ()=>{ const a=this._agencyAgg(this.MATRIX_COLS), l=this._locationPerformanceAgg(); return {ok:a.aPct===l.agencyPct&&l.activeStaff===this.activeStaffList().length,actual:'dashboard '+a.aPct+'% · rankings '+l.agencyPct+'% · staff '+l.activeStaff}; });
+      run('Aggregation: info / N/A cells are excluded from numerator and denominator','only g/y/o/w/r counted', ()=>{ const sample=active.slice(0,200); let met=0,un=0; sample.forEach(st=>this.complianceCodesFor(st,this.MATRIX_COLS).forEach(c=>{ if(this.locReqSuppressed(st,c)) return; const m=this.complianceLetterMet(this.effStatus(st,c)); if(m===true)met++; else if(m===false)un++; })); const s=this.complianceSummary(sample,this.MATRIX_COLS); return {ok:s.met===met&&s.unmet===un,actual:s.met+'/'+s.total+' vs hand count '+met+'/'+(met+un)}; });
+      const me=active.find(s=>this.MATRIX_COLS.some(c=>this.requiredFor(s,c)&&this.effStatus(s,c)==='r'));
+      if(me) run('Staff Portal: My Trainings statuses match the compliance engine','same letters', ()=>{ const NM={r:'red',o:'orange',y:'yellow',g:'green',w:'white'}; const bad=this.buildStaffCourses(me).filter(c=>c.required).filter(c=>NM[this.effStatus(me,c.code)]!==c.status); return {ok:!bad.length,actual:bad.length?('mismatch: '+bad.map(c=>c.code).join(', ')):'all match'}; });
+      run('Staff Portal: attestation signature must match the staff name','valid forms accepted; others rejected', ()=>{ const t=['Ben Semel','semel,  ben','BEN  SEMEL'].every(v=>this.signatureMatchesName(v,'Semel, Ben')), f=['Someone Else','Ben','Semel'].some(v=>this.signatureMatchesName(v,'Semel, Ben')); return {ok:t&&!f,actual:(t?'accepts':'rejects')+' valid · '+(f?'accepts':'rejects')+' invalid'}; });
+      run('Dates: impossible dates are rejected','2/30/26 rejected, 2/29/24 accepted', ()=>{ const a=this.parseMDY('2/30/26'), b=this.parseMDY('2/29/24'); return {ok:!a&&!!b,actual:(a?'accepted':'rejected')+' 2/30/26 · '+(b?'accepted':'rejected')+' 2/29/24'}; });
+      run('Records: archived staff are never counted as active','0', ()=>{ const n=active.filter(s=>this.isArchivedStaff(s)).length; return {ok:n===0,actual:n}; });
+      run('Sessions: no staff member holds two seats in one session','0', ()=>{ let d=0; (this.state.sessions||[]).forEach(s=>{ const seen=new Set(); (s.roster||[]).forEach(r=>{ const k=String(r.staffId); if(seen.has(k)) d++; seen.add(k); }); }); return {ok:d===0,actual:d}; });
+      return out;
+    }
+    runAllQa(){ if(this.__memo) delete this.__memo['qaResults']; this.setState({qaLastRun:new Date().toLocaleString('en-US')}); }
   async onXcFilePick(e){ const f=e.target.files&&e.target.files[0]; if(!f)return; const url=await this.readFile(f); this.setState({xcFile:url, xcFileName:f.name}); }
   EXT_CERT_TYPES=[{key:'CPR',label:'CPR',satisfies:['CPR'],exp:'+2y'},{key:'FA',label:'First Aid',satisfies:['FA'],exp:'+2y'},{key:'EMT',label:'EMT Card',satisfies:['CPR','FA'],exp:'manual'},{key:'SCIPF',label:'SCIP Full',satisfies:['SCIPR'],exp:'+1y'},{key:'SCIPR',label:'SCIP Recertification',satisfies:['SCIPR'],exp:'+1y'},{key:'AMAP',label:'AMAP Certificate',satisfies:['AMAP'],exp:'none'}];
   extCertType(key){ return this.EXT_CERT_TYPES.find(t=>t.key===key)||{key,label:this.courseLabel(key),satisfies:[key],exp:'rule'}; }
@@ -10456,33 +10586,51 @@ class Component extends DCLogic {
   _complianceGrid(matrixCols){ const cols=matrixCols||this.MATRIX_COLS; const day=this.TODAY_MDY.join('/'); const key=cols.join('|'); return this._memo('complianceGrid:'+key, this._cmpDeps().concat([day]), ()=>{ const byId=Object.create(null); this._activeRosterMemo().forEach(r=>{ const row=Object.create(null); cols.forEach(c=>{ row[c]=this.effStatus(r,c); }); byId[String(r.id)]=row; }); return {byId,cols}; }); }
   // Agency-wide compliance aggregation (dashboard KPIs + operations forecast). Memoized on data
   // only, so it computes ONCE per data change and is a free cache hit on every keystroke.
-  _agencyAgg(matrixCols){ return this._memo('agencyAgg', this._cmpDeps(), ()=>{
-      const _active=this._activeRosterMemo(), grid=this._complianceGrid(matrixCols).byId;
-      let aRedN=0,aTotalCells=0,aGreenCells=0,opOverdue=0,opDue30=0,opDue90=0; const opRedRows=[],opDueRows=[];
-      _active.forEach(r=>{ let hasR=false,hasO=false,hasY=false; const redItems=[],dueItems=[], row=grid[String(r.id)]||{};
-        matrixCols.forEach(c=>{ const l=row[c],nm=this.SHORT_NAME[c]||c; if(l==='r'){aRedN++;aTotalCells++;hasR=true;redItems.push(nm);} else if(['g','y','o','w','info'].includes(l)){aTotalCells++;aGreenCells++;if(l==='o'){hasO=true;dueItems.push(nm);}else if(l==='y'){hasY=true;dueItems.push(nm);}} });
-        if(hasR)opOverdue++; else if(hasO)opDue30++; else if(hasY)opDue90++;
+  // Active staff for every headline count (dashboard, rankings): employed, has a location, not a
+  // system account. Independent of the Records "show archived" toggle so all screens agree.
+  activeStaffList(){ return this._memo('activeStaffList', this._cmpDeps(), ()=>{ const sys=this.systemAccountSet(); return (this.state.roster||[]).filter(r=>r&&!sys.has(String(r.id))&&this.isActiveStaff(r)); }); }
+  // Requirement codes counted for one staff member: the columns plus location-added courses.
+  complianceCodesFor(st,cols){ const add=this.locAddedCodesFor(st)||[]; return add.length?cols.concat(add.filter(c=>cols.indexOf(c)<0)):cols; }
+  // ONE compliance aggregation for every % surface (CMP-11/CMP-14). A requirement cell counts as met
+  // when g/y/o/w and unmet when r; info (completed but not required) and na are excluded from both
+  // the numerator and the denominator. `visit(st, cells, red, due)` lets a caller build row detail
+  // from the same sweep. staffPct = share of staff with no red cell ("fully compliant").
+  // true = met, false = unmet (red), null = not counted (info / na / anything else).
+  complianceLetterMet(l){ return l==='r'?false:((l==='g'||l==='y'||l==='o'||l==='w')?true:null); }
+  // Same rule over a list of status letters (report builder rows).
+  complianceLetterSummary(letters){ let met=0,unmet=0; (letters||[]).forEach(l=>{ const m=this.complianceLetterMet(l); if(m===true)met++; else if(m===false)unmet++; }); const total=met+unmet; return {met,unmet,total,pct:total?Math.round(met/total*100):null}; }
+  complianceSummary(staffList,cols,visit){ cols=cols||this.MATRIX_COLS; const grid=this._complianceGrid(cols).byId;
+    let met=0,unmet=0,dueCells=0,redStaff=0,dueStaff=0,compliantStaff=0; const list=staffList||[];
+    list.forEach(st=>{ const row=grid[String(st.id)]; let red=false,due=false; const cells=visit?[]:null;
+      this.complianceCodesFor(st,cols).forEach(c=>{ if(this.locReqSuppressed(st,c)) return; const l=(row&&(c in row))?row[c]:this.effStatus(st,c);
+        if(l==='r'){unmet++;red=true;} else if(l==='g'||l==='y'||l==='o'||l==='w'){met++; if(l==='y'||l==='o'){due=true;dueCells++;}} else return; if(cells) cells.push({code:c,l}); });
+      if(red) redStaff++; else { compliantStaff++; if(due) dueStaff++; } if(visit) visit(st,cells,red,due); });
+    const total=met+unmet;
+    return {staff:list.length,met,unmet,total,dueCells,redStaff,dueStaff,compliantStaff,pct:total?Math.round(met/total*100):0,staffPct:list.length?Math.round(compliantStaff/list.length*100):0};
+  }
+  _agencyAgg(matrixCols){ const cols=matrixCols||this.MATRIX_COLS; return this._memo('agencyAgg', this._cmpDeps().concat([cols.join('|')]), ()=>{
+      let opOverdue=0,opDue30=0,opDue90=0; const opRedRows=[],opDueRows=[];
+      const sum=this.complianceSummary(this.activeStaffList(),cols,(r,cells,red)=>{ const redItems=[],dueItems=[]; let hasO=false,hasY=false;
+        cells.forEach(({code,l})=>{ const nm=this.SHORT_NAME[code]||code; if(l==='r')redItems.push(nm); else if(l==='o'){hasO=true;dueItems.push(nm);} else if(l==='y'){hasY=true;dueItems.push(nm);} });
+        if(red)opOverdue++; else if(hasO)opDue30++; else if(hasY)opDue90++;
         if(redItems.length&&opRedRows.length<40)opRedRows.push({name:r.name,loc:r.loc,items:redItems.join(', ')});
         if(dueItems.length&&opDueRows.length<40)opDueRows.push({name:r.name,loc:r.loc,items:dueItems.join(', ')});
       });
-      return {aRed:aRedN,aTotalCells,aGreenCells,opOverdue,opDue30,opDue90,opRedRows,opDueRows};
+      return {aRed:sum.unmet,aTotalCells:sum.total,aGreenCells:sum.met,aPct:sum.pct,aStaffPct:sum.staffPct,aCompliantStaff:sum.compliantStaff,aRedStaff:sum.redStaff,aActiveStaff:sum.staff,opOverdue,opDue30,opDue90,opRedRows,opDueRows};
     }); }
   // Location performance ranking — uses the exact same compliance denominator as the agency
   // dashboard: green/yellow/orange/white are compliant, red alone is noncompliant.
   // White includes not-yet-required / not-required; info is also a compliant white-state. N/A is excluded. The calculation is memoized and runs only when the Admin ranking tab is open.
   _locationPerformanceAgg(){ return this._memo('locationPerformanceAgg', this._cmpDeps().concat([this.state.locations]), ()=>{
-      const archived=this.complianceExcludedSet();
-      const active=(this.state.roster||[]).filter(r=>r&&!archived.has(r.id)&&r.loc&&String(r.loc).trim());
+      const active=this.activeStaffList();
       const D=window.HASC_DATA||{};
       const people=[...(D.managers||[]),...(D.areaCoordinators||[])];
       const rosterById={}; (this.state.roster||[]).forEach(r=>{ if(r&&r.id!=null) rosterById[String(r.id)]=r; });
       const nameFor=(id)=>{ const key=String(id==null?'':id); const p=people.find(x=>String(x.empId)===key); if(p&&p.name) return p.name; const r=rosterById[key]; return r?(this.dispName(r)||r.name||key):key; };
       const groups={};
       active.forEach(st=>{ const res=this.getStaffResolvedLocation(st); const name=res.locId?res.name:((res.rawName||'').trim()||'(No location)'); const key=res.locId||('raw:'+name.toLowerCase()); if(!groups[key]) groups[key]={key,locId:res.locId||'',name,staff:[],mgrIds:new Set()}; groups[key].staff.push(st); if(st.mgrId!=null&&String(st.mgrId).trim()) groups[key].mgrIds.add(String(st.mgrId)); });
-      const grid=this._complianceGrid(this.MATRIX_COLS).byId;
       let compliantTotal=0, requiredTotal=0;
-      let rows=Object.values(groups).map(g=>{ let compliant=0, noncompliant=0, dueSoon=0, total=0;
-        g.staff.forEach(st=>{ const codes=[...new Set(this.MATRIX_COLS.concat(this.locAddedCodesFor(st)||[]))], row=grid[String(st.id)]||{}; codes.forEach(code=>{ if(this.locReqSuppressed(st,code)) return; const l=Object.prototype.hasOwnProperty.call(row,code)?row[code]:this.effStatus(st,code); if(['g','y','o','w','info'].includes(l)){ compliant++; total++; if(l==='y'||l==='o') dueSoon++; } else if(l==='r'){ noncompliant++; total++; } }); });
+      let rows=Object.values(groups).map(g=>{ const sum=this.complianceSummary(g.staff,this.MATRIX_COLS); const compliant=sum.met, noncompliant=sum.unmet, dueSoon=sum.dueCells, total=sum.total;
         compliantTotal+=compliant; requiredTotal+=total;
         const loc=g.locId?(this.state.locations||[]).find(l=>l.id===g.locId):null;
         const officialIds=loc&&Array.isArray(loc.managers)?loc.managers.map(String).filter(Boolean):[];
@@ -10503,9 +10651,11 @@ class Component extends DCLogic {
       const _active=this._activeRosterMemo(), grid=this._complianceGrid(matrixCols).byId;
       const locScoped=aLoc?_active.filter(r=>this.canonicalLocName(r)===aLoc):_active;
       const aFiltered=this._filterStaff(locScoped,aSearch,'full');
-      let aDueSoon=0,aOverdueStaff=0,_aFT=0,_aFG=0; const used=Object.create(null);
-      aFiltered.forEach(r=>{ let due=false,red=false; const row=grid[String(r.id)]||{}; matrixCols.forEach(c=>{ const l=row[c]; if(l==='o'||l==='y')due=true; if(l==='r')red=true; if(l==='r'){_aFT++;used[c]=1;} else if(['g','y','o','w','info'].includes(l)){_aFT++;_aFG++;used[c]=1;} else if(r.dt&&r.dt[c]) used[c]=1; }); if(due)aDueSoon++; if(red)aOverdueStaff++; });
-      const aPctFiltered=_aFT?Math.round(_aFG/_aFT*100):0;
+      const used=Object.create(null);
+      aFiltered.forEach(r=>{ const row=grid[String(r.id)]||{}; matrixCols.forEach(c=>{ const l=row[c]; if(l==='r'||l==='g'||l==='y'||l==='o'||l==='w'||l==='info'||(r.dt&&r.dt[c])) used[c]=1; }); });
+      // Same counting rule as every other surface; "due soon" = any due item, counted even with a red.
+      let aDueSoon=0; const _sum=this.complianceSummary(aFiltered,matrixCols,(r,cells)=>{ if(cells.some(x=>x.l==='o'||x.l==='y')) aDueSoon++; });
+      const aOverdueStaff=_sum.redStaff, aPctFiltered=_sum.pct;
       const aTotalPages=Math.max(1,Math.ceil(aFiltered.length/aPageSize)); const aPageC=Math.min(aPage,aTotalPages-1);
       const _ord=this._orderFor(aFiltered); const aCols=_ord.filter(c=>!!used[c]);
       const _m=this.buildComplianceMatrix(aFiltered.slice(aPageC*aPageSize,aPageC*aPageSize+aPageSize), aCols);
@@ -10517,12 +10667,12 @@ class Component extends DCLogic {
   // its agency-cell sweep are heavy; cheap KPIs (mRed/mDueSoon from r.rec) stay in renderVals.
   _mgrMatrixView(scopeKey, scopedRoster, mLoc, mSearch, repShow, artFirst){
     return this._memo('mgrMatrixView', this._cmpDeps().concat([scopeKey, mLoc, mSearch, repShow, artFirst]), ()=>{
-      const ES=(r,c)=>this.effStatus(r,c); const locScoped=mLoc?scopedRoster.filter(r=>this.canonicalLocName(r)===mLoc):scopedRoster;
+      const locScoped=mLoc?scopedRoster.filter(r=>this.canonicalLocName(r)===mLoc):scopedRoster;
       const team=this._filterStaff(locScoped,mSearch,'basic');
       const mgrCols=this._orderFor(team,artFirst).filter(c=>team.some(s=>this.requiredFor(s,c)||(s.dt&&s.dt[c])));
       const _m=this.buildComplianceMatrix(team.slice(0,repShow), mgrCols);
       // Overdue / due-soon staff counts come from the same effStatus sweep as the % (never raw imported letters).
-      let totalCells=0, greenCells=0, redStaff=0, dueStaff=0; team.forEach(r=>{ let red=false,due=false; this.MATRIX_COLS.forEach(c=>{const l=ES(r,c); if(l==='r'){totalCells++;red=true;} else if(['g','y','o','w','info'].includes(l)){totalCells++;greenCells++; if(l==='o'||l==='y') due=true;}}); if(red) redStaff++; else if(due) dueStaff++; });
+      const _sum=this.complianceSummary(team,this.MATRIX_COLS); const totalCells=_sum.total, greenCells=_sum.met, redStaff=_sum.redStaff, dueStaff=_sum.dueStaff;
       return { team, mgrCols, matrixHeads:mgrCols.map(c=>this.SHORT_NAME[c]||c), matrixRows:_m.rows, matrixError:_m.error, matrixFlagged:_m.flagged, totalCells, greenCells, redStaff, dueStaff }; });
   }
   // Shared column ordering (extracted from renderVals so the memoized views can reuse it).
@@ -10990,13 +11140,13 @@ class Component extends DCLogic {
     const wantSoon=o.includeSoon===true;
     const loc=String(o.loc||''), search=String(o.search||'').trim().toLowerCase();
     const out=[];
-    this._activeRosterMemo().forEach(r=>{
+    (o.list||this._activeRosterMemo()).forEach(r=>{
       if(loc && !(r.loc===loc||this.canonicalLocName(r)===loc)) return;
       if(search){ const hay=(String(r.name||'')+' '+String(r.id||'')+' '+String(r.pos||'')).toLowerCase();
         if(hay.indexOf(search)<0) return; }
-      const row=grid[String(r.id)]||{};
+      const row=grid[String(r.id)];
       const overdue=[],soon=[];
-      cols.forEach(c=>{ const st=row[c];
+      cols.forEach(c=>{ const st=row?row[c]:this.effStatus(r,c);
         if(st==='r') overdue.push(c);
         else if(wantSoon&&(st==='o'||st==='y')) soon.push(c); });
       if(!overdue.length&&!soon.length) return;
@@ -11661,7 +11811,8 @@ class Component extends DCLogic {
   usDate(s){ return this.importDate(s); }
   importNow(){ const d=new Date(); return {iso:d.toISOString(), display:(d.getMonth()+1)+'/'+d.getDate()+'/'+String(d.getFullYear()).slice(-2), label:d.toLocaleString('en-US')}; }
   normStatus(v){ const x=String(v==null?'':v).trim().toLowerCase(); if(['a','active','current','employed'].includes(x)) return 'A'; if(['i','inactive','terminated','separated','archived','former'].includes(x)) return 'I'; return '?'; }
-  isArchivedStaff(s){ return !!s && (this.state.docs.archived||[]).some(id=>String(id)===String(s.id)); }
+  // Memoized string Set (QA-05): isActiveStaff runs across the whole roster on every render path.
+  isArchivedStaff(s){ return !!s && this.archivedStaffSet().has(String(s.id)); }
   employmentState(s){
     if(!s) return 'inactive';
     if(this.isArchivedStaff(s)||s.archived===true) return 'inactive';
@@ -13256,7 +13407,7 @@ class Component extends DCLogic {
       catch(e){ this.toast('Could not load the local video: '+(e&&e.message||e)); return; }
     }
     const next={ vtPlayId:videoId, vtPlayVersion:v.version_number||this.SS().vtVersionForStaff(videoId,staffId), vtPlaySrc:src, vtPlayKind:kind, vtQuizAns:{}, vtQuizResult:null, vtQuizOpen:false, vtDurBad:false, vtBunnyCaptions:[], vtBunnyCaption:'', vtBunnyCaptionLoading:kind==='bunny', vtBunnyCaptionMsg:kind==='bunny'?'Loading caption languages from Bunny Stream…':'', vtAttested:false, vtFinished:false, vtSig:'', vtSignedAt:null, vtGateIdx:null, vtGatePick:null, vtGateResult:null };
-    if(options.course)Object.assign(next,{vtCourse:options.course,coursePlayerId:options.course.id,cpStep:0,cpWatch:0,cpEmbedAns:null,cpEmbedDone:false,cpQuizAns:{},cpQuizShown:false,cpAttest:false,cpSig:'',cpLastScore:null});
+    if(options.course)Object.assign(next,{vtCourse:options.course,coursePlayerId:options.course.id,cpStep:0,cpWatch:0,cpEmbedAns:null,cpEmbedDone:false,cpQuizAns:{},cpQuizShown:false,cpQuizPassed:false,cpAttest:false,cpSig:'',cpLastScore:null});
     this.setState(next,()=>{ if(kind==='bunny'){setTimeout(()=>this._vtInitBunny(videoId,staffId),80);} });
   }
   _vtMediaCurrent(){ const el=this.vtEl(); return this.state.vtPlayKind==='bunny'?(this._vtBunnyCurrent||0):(el?el.currentTime||0:0); }
@@ -13513,6 +13664,8 @@ class Component extends DCLogic {
     const needA=(v.require_attestation!==false); const sig=(this.state.vtSig||'').trim();
     if(needA && !this.state.vtAttested){ this.toast('Check the attestation box to complete.'); return; }
     if(needA && !sig){ this.toast('Type your full name to sign the attestation.'); return; }
+    const _sigSt=this.staffById(staffId), _sigName=(_sigSt&&_sigSt.name)||staffName;
+    if(needA && !this.signatureMatchesName(sig,_sigName)){ this.toast('The signature must match your name as it appears on your staff record ('+_sigName+').'); return; }
     if(needA) this.SS().vtAttest(videoId,staffId,staffName,sig);
     const result=this.SS().vtFinalizeCompletion(videoId,staffId,staffName,{signature:sig,origin:'LMS',portal:'Staff'});
     if(!result||!result.ok){ const c=(result&&result.checks)||{}; const missing=[]; if(!c.watch)missing.push('required video watch percentage'); if(!c.embedded)missing.push('embedded questions'); if(!c.quiz)missing.push('passing quiz score'); if(!c.attestation)missing.push('attestation'); if(c.updates===false)missing.push('training update acknowledgement'); this.toast('Course cannot be submitted yet'+(missing.length?': '+missing.join(', '):'.')); return; }
@@ -13561,9 +13714,9 @@ class Component extends DCLogic {
       addToTranscript:!!completion.add_to_transcript,countsTowardCompliance:!!completion.counts_toward_compliance,
       classification:completion.classification||video.classification||'Professional Development',mandatory:!!completion.mandatory,
       videoId:video.id,videoVersion:video.version_number||1,retakeNo:completion.retake_no||1,by:'staff',when:date,source:'Online video course (self-hosted)',origin:'LMS'};
+    const docs={...this.state.docs,completions:[...((this.state.docs&&this.state.docs.completions)||[]),rec]};
     let nextRoster=this.state.roster;
     if(completion.counts_toward_compliance&&video.compliance_code){ nextRoster=this.applyCompletionsToRoster(this.applyVoidsToRoster(this.state.roster,docs),docs); }
-    const docs={...this.state.docs,completions:[...((this.state.docs&&this.state.docs.completions)||[]),rec]};
     this.setState({roster:nextRoster,docs}); this.saveDocs(docs);
     this.logAudit('Completion posted from online video course',{staff:st.name,target:video.title,next:date+(completion.counts_toward_compliance?' · mandatory compliance':' · elective/non-mandatory'),notes:'Final submission '+iso+' · source LMS',sev:completion.counts_toward_compliance?'Compliance':'Info',relatedId:completion.id});
     const finalQuestionCount=this.SS().vtFinal(video.id,staffId).length;
@@ -13843,22 +13996,34 @@ class Component extends DCLogic {
     const myStaff=(role==='manager'&&cu)? new Set(
       this.managerAuthorizedRoster(cu).map(r=>r.id)) : null;
     const _vtRosterById=this._rosterByIdMemo();
-    let rows=ss.vtRows().map(r=>{ const st=_vtRosterById[String(r.staff_id)]||null; const v=ss.vtVideoById(r.video_id); const due=this.effectiveAssignmentDue(st,v,r.due_date); return {...r,due_date:due,overdue:!r.passed&&!!due&&new Date(due).getTime()<Date.now()}; }).filter(r=>{
-      if(myStaff && !myStaff.has(r.staff_id)) return false;
+    // MGR-07: vtRows() statuses are completed | in_progress | questions_pending | attestation_pending |
+    // failed | voided | not_started. Group them for the filter (option values kept for saved state)
+    // and never mark a completed/voided/exempt row overdue.
+    const _vtGroup=(st)=>st==='completed'?'passed':(st==='failed'?'failed_quiz':((st==='in_progress'||st==='watching'||st==='questions_pending'||st==='attestation_pending'||st==='submitted')?'watching':(st==='voided'||st==='exempt'?st:'not_started')));
+    const baseRows=ss.vtRows().map(r=>{ const st=_vtRosterById[String(r.staff_id)]||null; const v=ss.vtVideoById(r.video_id); const due=this.effectiveAssignmentDue(st,v,r.due_date); const closed=r.status==='completed'||r.status==='voided'||r.status==='exempt'; return {...r,due_date:due,group:_vtGroup(r.status),overdue:!closed&&!!due&&new Date(due).getTime()<Date.now()}; }).filter(r=>!myStaff||myStaff.has(r.staff_id)||myStaff.has(String(r.staff_id)));
+    let rows=baseRows.filter(r=>{
       if(this.state.vtFilterVideo && r.video_id!==this.state.vtFilterVideo) return false;
       if(this.state.vtFilterLoc && r.location!==this.state.vtFilterLoc) return false;
       if(this.state.vtFilterStatus==='overdue') return r.overdue;
-      if(this.state.vtFilterStatus && r.status!==this.state.vtFilterStatus) return false;
+      if(this.state.vtFilterStatus && r.group!==this.state.vtFilterStatus) return false;
       return true;
     });
+    // MGR-06: a manager's tiles come from their own staff's rows, not agency-wide totals.
+    if(myStaff){ const live=baseRows.filter(r=>r.status!=='voided'&&r.status!=='exempt'); const n=g=>live.filter(r=>r.group===g).length; const passedN=n('passed');
+      out.vtStats=[
+        { label:'Active courses', value:new Set(live.map(r=>r.video_id)).size, color:'#1F3864' },
+        { label:'Staff assigned', value:new Set(live.map(r=>String(r.staff_id))).size, color:'#2F5496' },
+        { label:'Completed', value:passedN, color:'#1F9D55' },
+        { label:'In progress', value:n('watching'), color:'#B68900' },
+        { label:'Failed quiz', value:n('failed_quiz'), color:n('failed_quiz')?'#D9730D':'#94a3b8' },
+        { label:'Overdue', value:live.filter(r=>r.overdue).length, color:live.some(r=>r.overdue)?'#D93025':'#94a3b8' } ];
+      out.vtRate=(live.length?Math.round(passedN/live.length*100):0)+'%'; }
     rows.sort((a,b)=>(a.staff_name||'').localeCompare(b.staff_name||''));
     out.vtCount=rows.length;
-    const SB={ passed:{bg:'#E4F6EB',fg:'#1F9D55',label:'Passed'}, failed_quiz:{bg:'#FCE4E1',fg:'#D93025',label:'Quiz not passed'},
-               watching:{bg:'#FFF6D9',fg:'#B68900',label:'Watching'}, not_started:{bg:'#EEF1F8',fg:'#667085',label:'Not started'} };
     out.vtRows=rows.slice(0,this.state.vtShow||60).map(r=>{
-      const c=SB[r.status]||SB.not_started;
+      const _lbl=this.prStatusLabel({...r,overdue:false}), _pc=this.prStatusColors(r.overdue?'Overdue':_lbl);
       return { staff:r.staff_name, loc:r.location||'—', video:r.video_title, due:r.due_date||'—',
-        statusBg:r.overdue?'#FCE4E1':c.bg, statusFg:r.overdue?'#D93025':c.fg, statusLabel:r.overdue?('Overdue · '+c.label):c.label,
+        statusBg:_pc[0], statusFg:_pc[1], statusLabel:r.overdue?('Overdue · '+_lbl):_lbl,
         watch:r.watched_pct+'%', watchFg:r.watch_done?'#1F9D55':'#8a93a6',
         barW:Math.min(100,r.watched_pct)+'%', barBg:r.watch_done?'#1F9D55':'#C9D2E3',
         quiz: r.attempts? ((r.best_score!=null?r.best_score:0)+'% · '+r.attempts+' attempt'+(r.attempts===1?'':'s')) : 'Not attempted',
@@ -13873,7 +14038,7 @@ class Component extends DCLogic {
     out.vtMoreLabel='Show more ('+(rows.length-(this.state.vtShow||60))+' remaining)';
     out.onVtMore=()=>this.setState(s=>({vtShow:(s.vtShow||60)+60}));
     out.vtFilterVideoOpts=[{v:'',label:'All courses'}].concat(ss.vtVideos().map(v=>({v:v.id,label:v.title})));
-    out.vtFilterLocOpts=[{v:'',label:'All locations'}].concat([...new Set(ss.vtRows().map(r=>r.location).filter(Boolean))].sort().map(l=>({v:l,label:l})));
+    out.vtFilterLocOpts=[{v:'',label:'All locations'}].concat([...new Set((myStaff?baseRows:ss.vtRows()).map(r=>r.location).filter(Boolean))].sort().map(l=>({v:l,label:l})));
     out.vtFilterVideo=this.state.vtFilterVideo; out.vtFilterLoc=this.state.vtFilterLoc; out.vtFilterStatus=this.state.vtFilterStatus;
     out.onVtFilterVideo=(e)=>this.vtSetFilter('vtFilterVideo',e.target.value);
     out.onVtFilterLoc=(e)=>this.vtSetFilter('vtFilterLoc',e.target.value);
@@ -13928,7 +14093,7 @@ class Component extends DCLogic {
       const doneCP=(((this.state.courseProg||{})[this.progKey('vtc:'+videoId,staffId)]||{}).status==='Completed');
       if(!started && !doneCP) this.logTrainingEvent('start', v.title, 'Video training', staffId); }
     if(course.updateOnly){
-      this.setState({vtPlayId:videoId,vtPlayVersion:v.version_number||ss.vtVersionForStaff(videoId,staffId),vtCourse:course,coursePlayerId:course.id,cpStep:0,cpWatch:0,cpEmbedAns:null,cpEmbedDone:false,cpQuizAns:{},cpQuizShown:false,cpAttest:false,cpSig:'',cpLastScore:null});
+      this.setState({vtPlayId:videoId,vtPlayVersion:v.version_number||ss.vtVersionForStaff(videoId,staffId),vtCourse:course,coursePlayerId:course.id,cpStep:0,cpWatch:0,cpEmbedAns:null,cpEmbedDone:false,cpQuizAns:{},cpQuizShown:false,cpQuizPassed:false,cpAttest:false,cpSig:'',cpLastScore:null});
       return;
     }
     return this.vtOpen(videoId,staffId,{course}); }
@@ -14099,7 +14264,7 @@ class Component extends DCLogic {
     }
     return id;
   }
-  archivedStaffSet(){ return this._memo('archivedStaffSet',[(this.state.docs&&this.state.docs.archived)],()=>new Set((this.state.docs&&this.state.docs.archived)||[])); }
+  archivedStaffSet(){ return this._memo('archivedStaffSet',[(this.state.docs&&this.state.docs.archived)],()=>new Set(((this.state.docs&&this.state.docs.archived)||[]).map(String))); }
   activeStaffRoster(){ return this._memo('activeStaffRoster',[this.state.roster,(this.state.docs&&this.state.docs.archived)],()=> (this.state.roster||[]).filter(r=>this.isEmploymentActive(r))); }
   _videoCompletionPresence(){ return this._memo('videoCompletionPresence',[(this.state.docs&&this.state.docs.completions)],()=>{ const out=new Set(); ((this.state.docs&&this.state.docs.completions)||[]).forEach(c=>{ if(!/video/i.test(c.source||'')) return; const code=c.complianceCode||c.course; if(c.staffId!=null&&code) out.add(String(c.staffId)+'|'+String(code)); }); return out; }); }
   mgrNameById(mgrId){ const m=(this.state.roster||[]).find(r=>r.id===mgrId); return m?m.name:('ID '+mgrId); }
@@ -14420,7 +14585,7 @@ class Component extends DCLogic {
     if(st){ const why=this.certificateBlockReason(st,wanted,d,cm); if(why){ this.toast(why); return; } }
     this.setState({modal:{type:'cert',staffId,code:wanted||code,completionId:cm?this.completionIdValue(cm):null,completionDate:d}});
   }
-  buildStaffCourses(st){ const nurse=this.isNurse(st); const sdch=!nurse&&this.isSDCH(st); const baseOrder=nurse?['O1','O2','O3','EPP','ART','RNORI','RNPLAN','PONS']:(sdch?['SDCH1','SDCH2','ART','O1','O2','O3']:['O1','O2','O3','ART','EPP','PA','CPR','FA','SCIPR','AMAP','AMAPP','DYS','DIAB','DIABP','DD','CB','CBP','TF','TFP','WCO','WCI']); const order=[...baseOrder,...this.rptComplianceCodes().filter(c=>!baseOrder.includes(c)),...this.locAddedCodesFor(st).filter(c=>!baseOrder.includes(c))]; const ONLINE=new Set(this.masterCourseCatalog().filter(c=>c.online).map(c=>c.code)); const NMAP={r:'red',o:'orange',y:'yellow',g:'green',w:'white'}; return order.filter(c=>this.requiredFor(st,c)||(st.dt&&st.dt[c])).map(c=>{ let l=this.effStatus(st,c); if(l==='na') l='w'; if(l==='info') l='g'; const dt=(st.dt&&st.dt[c])||'\u2014'; const status=NMAP[l]||'white'; const hasCert=(l==='g'||l==='y'||l==='o')&&dt!=='\u2014'; const info= l==='r'?'Action needed':(l==='g'?('Completed '+(dt!=='\u2014'?dt:'')):(l==='w'?'Not yet due / not required':'Due soon')); const expires=this.expirationFor(st,c,dt); return {code:c,name:(this.COURSE_NAME[c]||c),cat:st.pos||'',fmt:ONLINE.has(c)?'Online':'In-person',status,completed:dt,expires,online:ONLINE.has(c),hasCert,info}; }); }
+  buildStaffCourses(st){ const nurse=this.isNurse(st); const sdch=!nurse&&this.isSDCH(st); const baseOrder=nurse?['O1','O2','O3','EPP','ART','RNORI','RNPLAN','PONS']:(sdch?['SDCH1','SDCH2','ART','O1','O2','O3']:['O1','O2','O3','ART','EPP','PA','CPR','FA','SCIPR','AMAP','AMAPP','DYS','DIAB','DIABP','DD','CB','CBP','TF','TFP','WCO','WCI']); const order=[...baseOrder,...this.rptComplianceCodes().filter(c=>!baseOrder.includes(c)),...this.locAddedCodesFor(st).filter(c=>!baseOrder.includes(c))]; const ONLINE=new Set(this.masterCourseCatalog().filter(c=>c.online).map(c=>c.code)); const NMAP={r:'red',o:'orange',y:'yellow',g:'green',w:'white'}; return order.filter(c=>this.requiredFor(st,c)||(st.dt&&st.dt[c])).map(c=>{ let l=this.effStatus(st,c); if(l==='na') l='w'; if(l==='info') l='g'; const dt=(st.dt&&st.dt[c])||'\u2014'; const status=NMAP[l]||'white'; const hasCert=(l==='g'||l==='y'||l==='o')&&dt!=='\u2014'; const info= l==='r'?'Action needed':(l==='g'?('Completed '+(dt!=='\u2014'?dt:'')):(l==='w'?'Not yet due / not required':'Due soon')); const expires=this.expirationFor(st,c,dt); return {code:c,name:(this.COURSE_NAME[c]||c),cat:st.pos||'',fmt:ONLINE.has(c)?'Online':'In-person',status,completed:dt,expires,online:ONLINE.has(c),hasCert,info,required:this.requiredFor(st,c)}; }); }
   // Merge persisted completion records (docs.completions) into a working copy of the staff
   // record. These survive reload and cover Add Independent Session, approved external
   // certificate, online course, posted internal certificate, and imported historical
@@ -15900,6 +16065,28 @@ class Component extends DCLogic {
     const sNeedsReschedule=!_staffPortalActive?[]:(this.state.requests||[]).filter(r=>String(r.staffId)===String(_sid2)&&r.status==='needsReschedule').map(r=>({title:r.courseName||this.COURSE_NAME[r.code]||r.code||'Training session',when:r.sessionDate||r.sessionTime||'Previous session cancelled',where:r.sessionLocation||'',detail:'The previous session was cancelled. Your registration is waiting for the Training Department to place you into a replacement session.'}));
     const sNeedsRescheduleHas=sNeedsReschedule.length>0;
     const sUpEmpty=sUpSessions.length===0&&!sNeedsRescheduleHas;
+    // STF-01 / UX-01: My Trainings leads with the staff member's own REQUIRED trainings, with the
+    // same effStatus the manager matrix uses, overdue first, and a real next step for each.
+    const sReqRows=!_staffPortalActive?[]:(()=>{ const st=_meStaff, sid=String(st.id), ss=this.SS();
+      const vtByCode={}; try{ if(ss&&ss.vtAssignmentsForStaff) ss.vtAssignmentsForStaff(sid).forEach(a=>{ const v=ss.vtVideoById(a.video_id); if(v&&v.active&&v.compliance_code&&!vtByCode[v.compliance_code]) vtByCode[v.compliance_code]=v; }); }catch(e){}
+      const regByCode={}; this.state.sessions.filter(s=>((s.roster||[]).some(x=>String(x.staffId)===sid)||_reqBySession[s.id])&&this.isUpcomingSession(s)&&!s.cancelled&&!s.certified).sort((a,b)=>this.cmpSession(a,b)).forEach(s=>{ if(!regByCode[s.code]) regByCode[s.code]=s; });
+      const fmt=(d)=>d?this.formatMDY(d):''; const P2={red:{l:'Overdue',bg:'#FCE4E1',fg:'#A61B12',bar:'#D93025'},orange:{l:'Due very soon',bg:'#FFEEDC',fg:'#9A4A06',bar:'#D9730D'},yellow:{l:'Due soon',bg:'#FFF6D9',fg:'#7A5B00',bar:'#E0B500'},white:{l:'Not yet due',bg:'#F1F5F9',fg:'#475569',bar:'#CBD5EE'},green:{l:'Current',bg:'#E4F6EB',fg:'#1F7A44',bar:'#1F9D55'}};
+      const findSessions=(code,name)=>{ const up=this.state.sessions.filter(s=>s.code===code&&this.isUpcomingSession(s)&&!s.cancelled&&!s.certified&&this.sessionDateObj(s)).sort((a,b)=>this.cmpSession(a,b)).slice(0,3); this.toast(up.length?('Ask your manager to register you for '+name+'. Upcoming sessions: '+up.map(s=>(s.when||s.date)+(s.where?(' at '+s.where):'')).join('; ')+'.'):('No '+name+' sessions are scheduled yet. Ask your manager to register you when one is posted.')); };
+      const order={red:0,orange:1,yellow:2,white:3,green:4};
+      return this.buildStaffCourses(st).filter(c=>c.required).map(c=>{ const done=c.completed&&c.completed!=='\u2014'; const exp=(c.expires&&c.expires!=='\u2014')?c.expires:'';
+        const due=done?'':(c.code==='ART'?((this.artInitialDueInfo(st)||{}).dueMDY||''):fmt(this.initialDueInfo(st,c.code).due));
+        let detail; if(c.status==='red') detail=done?('Expired '+exp):('Never completed'+(due?(' \u00b7 was due '+due):'')); else if(c.status==='orange'||c.status==='yellow') detail=done?('Expires '+exp):('Never completed \u00b7 due by '+due); else if(c.status==='white') detail=due?('Not due until '+due):(c.code==='ART'?'Due one year after your orientation courses are complete':'Not yet due'); else detail=done?('Completed '+c.completed+(exp&&exp!=='No expiration'?(' \u00b7 expires '+exp):'')):'Completed';
+        const reg=regByCode[c.code], vt=vtByCode[c.code], m=P2[c.status]||P2.white, needs=c.status!=='green';
+        let nextLine='', btnLabel='', onAction=null;
+        if(needs&&reg){ nextLine='You are registered: '+(reg.when||reg.date)+(reg.where?(' \u00b7 '+reg.where):''); }
+        else if(needs&&vt){ nextLine='Online video course available.'; btnLabel='Start video'; onAction=()=>this.playVideoCourse(vt.id,sid); }
+        else if(needs&&c.status!=='white'){ nextLine='Your manager registers you for in-person sessions.'; btnLabel='Find a session'; onAction=()=>findSessions(c.code,c.name); }
+        else if(!needs&&c.hasCert){ btnLabel='View certificate'; onAction=()=>this.openCert(c.code); }
+        return {code:c.code,name:c.name,detail,statusLabel:m.l,stBg:m.bg,stFg:m.fg,bar:m.bar,status:c.status,nextLine,hasNext:!!nextLine,btnLabel,hasBtn:!!onAction,onAction:onAction||(()=>{})}; })
+        .sort((a,b)=>(order[a.status]-order[b.status])||a.name.localeCompare(b.name)); })();
+    const _sReqOver=sReqRows.filter(r=>r.status==='red').length, _sReqDue=sReqRows.filter(r=>r.status==='orange'||r.status==='yellow').length;
+    const sReqSummary=_sReqOver>0?('You have '+_sReqOver+' overdue training'+(_sReqOver===1?'':'s')+(_sReqDue?(' and '+_sReqDue+' due soon'):'')+'.'):(_sReqDue>0?('Nothing overdue \u2014 '+_sReqDue+' training'+(_sReqDue===1?' is':'s are')+' due soon.'):('You are up to date on all '+sReqRows.length+' required training'+(sReqRows.length===1?'':'s')+'.'));
+    const sReqSummaryStyle='border-radius:12px;padding:12px 15px;margin:0 0 10px;font-size:14px;font-weight:900;'+(_sReqOver>0?'background:#FCE4E1;color:#A61B12;border:1px solid #F3C9C4':(_sReqDue>0?'background:#FFF6D9;color:#7A5B00;border:1px solid #F2D99C':'background:#E4F6EB;color:#1F7A44;border:1px solid #BFE5CD'));
 
     // ---------- MANAGER ----------
     const _artFirst=(this.props.artAfterO3??true);
@@ -15979,9 +16166,13 @@ class Component extends DCLogic {
     const mRegSessions=_registerTab?this.state.sessions.filter(s=>this.isUpcomingSession(s)&&!s.cancelled&&!s.certified&&!['cancelled','closed','locked','certified'].includes(String(s.status||'').toLowerCase())).sort((a,b)=>this.cmpSession(a,b)).map(s=>({id:s.id,optLabel:s.title+' · '+s.code+' — '+s.when+' · '+s.where})):[];
     const mRegSessObj=_registerTab?this.state.sessions.find(s=>s.id===this.state.mRegSession):null;
     const regBase0 = _registerTab?(this.state.regLoc ? scopedRoster.filter(r=>this.canonicalLocName(r)===this.state.regLoc) : scopedRoster):[];
-    const regBase = _registerTab?this._filterStaff(regBase0,this.state.regSearch,'basic'):[];
+    // UX-04: staff who need the selected course (r/o/y by effStatus) come first, worst first, then A–Z.
+    const _regCode=(_registerTab&&mRegSessObj)?this.normalizeTrainingCode(mRegSessObj.code,mRegSessObj.title):'';
+    const _regNeed=Object.create(null); const _regRank={r:0,o:1,y:2};
+    const _regLetter=(r)=>{ const k=String(r.id); if(!(k in _regNeed)) _regNeed[k]=this.requiredFor(r,_regCode)?this.effStatus(r,_regCode):'na'; return _regNeed[k]; };
+    const regBase = _registerTab?(()=>{ const f=this._filterStaff(regBase0,this.state.regSearch,'basic'); if(!_regCode) return f; return f.slice().sort((a,b)=>{ const ra=_regRank[_regLetter(a)], rb=_regRank[_regLetter(b)]; const na=ra==null?9:ra, nb=rb==null?9:rb; return (na-nb)||String(a.name||'').localeCompare(String(b.name||'')); }); })():[];
     const _regRowH=56,_regWindow=30,_regMaxStart=Math.max(0,regBase.length-1),_regStart=Math.min(Math.max(0,this.state.regWindowStart||0),_regMaxStart),_regEnd=Math.min(regBase.length,_regStart+_regWindow);
-    const mRegStaff=regBase.slice(_regStart,_regEnd).map(r=>({id:r.id,name:r.name,pos:r.pos,statusNote:(mRegSessObj&&(()=>{const _c=this.normalizeTrainingCode(mRegSessObj.code,mRegSessObj.title),_l=this.requiredFor(r,_c)?this.effStatus(r,_c):'na';return _l==='r'||_l==='o'||_l==='y';})())?'Needs this training':'Optional refresh',
+    const mRegStaff=regBase.slice(_regStart,_regEnd).map(r=>({id:r.id,name:r.name,pos:r.pos,statusNote:!_regCode?'No session selected':(()=>{ const _l=_regLetter(r); return (_l==='r'||_l==='o'||_l==='y')?'Needs this training':(_l==='na'||_l==='info'?'Not required for this role':'Current \u00b7 optional refresh'); })(),
       checked:!!this.state.mRegSel[r.id], onToggle:()=>this.setState(s=>({mRegSel:{...s.mRegSel,[r.id]:!s.mRegSel[r.id]}}))}));
     const regPadTopStyle='height:'+(_regStart*_regRowH)+'px',regPadBottomStyle='height:'+Math.max(0,(regBase.length-_regEnd)*_regRowH)+'px';
     const regCountLabel=regBase.length.toLocaleString()+' staff';
@@ -16071,6 +16262,9 @@ class Component extends DCLogic {
     const aUpcoming=(_isAdmin&&tab==='dash')?(()=>{ const t0=this.todayDate(); t0.setHours(0,0,0,0); const end=new Date(t0); end.setDate(end.getDate()+7); return (this.state.sessions||[]).filter(s=>{ const d=this.sessionDateObj(s); return d && d>=t0 && d<=end; }).sort((a,b)=>this.cmpSession(a,b)).map(s=>({title:s.title,when:s.date,instructor:s.instructor||'Instructor TBD'})); })():[];
     const aTotalCells=_agg.aTotalCells, aGreenCells=_agg.aGreenCells;
     const aPct=aTotalCells?Math.round(aGreenCells/aTotalCells*100):0;
+    // Staff with no overdue requirement, over the same active-staff population (UX-05).
+    const aStaffPct=_needsAgencyAgg?(_agg.aStaffPct||0):0;
+    const aSessionCount=(_isAdmin&&tab==='dash')?(()=>{ const t0=this.todayDate(); t0.setHours(0,0,0,0); return (this.state.sessions||[]).filter(s=>{ const d=this.sessionDateObj(s); return d&&d>=t0&&!s.cancelled; }).length; })():0;
     // PERF: the Compliance Color Report matrix + filtered KPIs run ONLY on the Reports tab and are
     // memoized on data + the APPLIED search/loc/page (see _recordsView). Debounced typing keeps the
     // applied search stable → cache hit → no per-keystroke roster sweep; the heavy build happens once
@@ -16349,7 +16543,7 @@ class Component extends DCLogic {
           rptPreviewMeta=_rows.length.toLocaleString()+' row(s) · Generated by '+_by+' · '+(new Date().toLocaleDateString('en-US'))+(_rows.length>_previewLimit?' · Previewing first '+_previewLimit.toLocaleString()+' rows; Excel workbook includes all rows and report colors':'');
           rptHasRows=_rows.length>0; rptNoRows=_rows.length===0 && !this.state.rptError;
           const _green=_rows.filter(r=>r.status==='g').length,_red=_rows.filter(r=>r.status==='r').length,_due=_rows.filter(r=>r.status==='o'||r.status==='y').length,_white=_rows.filter(r=>r.status==='w').length;
-          const _compliant=_green+_due+_white, _denom=_compliant+_red; const _pct=_denom?Math.round(_compliant/_denom*100):null;
+          const _pct=this.complianceLetterSummary(_rows.map(r=>r.status)).pct;
           rptSummaryCards=[{val:_rows.length.toLocaleString(),label:'Total Rows',color:'#152A4D'}];
           if(_pct!==null)rptSummaryCards.push({val:_pct+'%',label:'Compliant',color:'#1F9D55'});
           if(_green>0)rptSummaryCards.push({val:_green.toLocaleString(),label:'Complete',color:'#1F9D55'});
@@ -16551,7 +16745,7 @@ class Component extends DCLogic {
       onResetVf:()=>this.resetVoidFilters(), onExportComps:()=>this.exportCompletionsCsv(_vdFiltered),
       crRows, crMissingCount, crFlaggedCount, crHasMissing, crAllClear, crFlaggedNote,
       showVoidModal:!!_vm, vmRec, vmReason:_vm?(_vm.reason||''):'', vmAck:_vm?!!_vm.ack:false, vmCanVoid,
-      vmExpLabel:vmRec?(vmRec.noExpire?'Does not expire':vmRec.expires):'', vmCertLabel:vmRec?(vmRec.hasCert?(vmRec.certId||'Generated'):'No certificate — transcript-only'):'',
+      vmSessLabel:vmRec?(vmRec.sessionId?(vmRec.sessionId+(vmRec.sessionTitle?(' \u00b7 '+vmRec.sessionTitle):'')):'\u2014'):'', vmExpLabel:vmRec?(vmRec.noExpire?'Does not expire':vmRec.expires):'', vmCertLabel:vmRec?(vmRec.hasCert?(vmRec.certId||'Generated'):'No certificate — transcript-only'):'',
       vmVoidBtnStyle:`border:0;border-radius:999px;background:${vmCanVoid?'#C0392B':'#E0B7B2'};color:#fff;font-weight:800;font-size:13px;padding:11px 20px;cursor:${vmCanVoid?'pointer':'not-allowed'}`,
       onVmReason:(e)=>this.setModalField('reason', e.target.value), onVmAck:(e)=>this.setModalField('ack', e.target.checked), onVmConfirm:()=>this.voidCompletion() };
 
@@ -16590,7 +16784,7 @@ class Component extends DCLogic {
       // staff flags — limited personal-records portal: My Certificates, My Transcript, My Upcoming Sessions
       docLogo:this.documentBranding().logo, docPresentedBy:this.documentBranding().presentedBy,
       sAccountInactive, sCertsTab: role==='staff'&&!sAccountInactive&&tab==='certificates', sTranscript: role==='staff'&&!sAccountInactive&&tab==='transcript', sUpcomingTab: role==='staff'&&!sAccountInactive&&tab==='upcoming',
-      sCerts, sCertsEmpty, sPrintAllCerts, sLegacyCertCount, sLegacyTransCount, certShowLegacy:this.state.certShowLegacy===true, trxShowLegacy:this.state.trxShowLegacy===true, onCertShowLegacy:(e)=>this.setState({certShowLegacy:e.target.checked}), onTrxShowLegacy:(e)=>this.setState({trxShowLegacy:e.target.checked}), sUpSessions, sUpEmpty, sNeedsReschedule, sNeedsRescheduleHas, sStaffMeta, sHelpNote,
+      sReqRows, sReqHas:sReqRows.length>0, sReqSummary, sReqSummaryStyle, sCerts, sCertsEmpty, sPrintAllCerts, sLegacyCertCount, sLegacyTransCount, certShowLegacy:this.state.certShowLegacy===true, trxShowLegacy:this.state.trxShowLegacy===true, onCertShowLegacy:(e)=>this.setState({certShowLegacy:e.target.checked}), onTrxShowLegacy:(e)=>this.setState({trxShowLegacy:e.target.checked}), sUpSessions, sUpEmpty, sNeedsReschedule, sNeedsRescheduleHas, sStaffMeta, sHelpNote,
       sIntDocs:(role==='staff'&&!sAccountInactive&&cu&&cu.staffId)?this.internalDocsFor(cu.staffId,'staff').map(d=>({type:this.internalDispType(d.docType),date:d.date,expires:d.expires||'\u2014',fileName:d.fileName,onDl:()=>this.downloadDoc(d)})):[], sHasIntDocs:(role==='staff'&&!sAccountInactive&&cu&&cu.staffId)?this.internalDocsFor(cu.staffId,'staff').length>0:false,
       sTransRows, sFirst:(cu&&cu.name?cu.name.replace(/,.*/,'').trim().split(/\s+/)[0]:'there'),
       // manager flags
@@ -16614,7 +16808,7 @@ class Component extends DCLogic {
       admLoc:this.state.admLoc, admSearch:this._sd('admSearch'), onAdmLoc:(e)=>{this._resetVirtualList('adm-staff-scroll');this._resetVirtualList('rn-staff-scroll');this.setState({admLoc:e.target.value,admStaff:null,admWindowStart:0,rnWindowStart:0});}, onAdmSearch:(e)=>this._searchInput('admSearch',e.target.value,{admStaff:null,admWindowStart:0,rnWindowStart:0},undefined,['adm-staff-scroll','rn-staff-scroll']), admInclArch:this.state.admInclArch, onAdmInclArch:(e)=>{this._resetVirtualList('adm-staff-scroll');this._resetVirtualList('rn-staff-scroll');this.setState({admInclArch:e.target.checked,admStaff:null,admWindowStart:0,rnWindowStart:0});}, admPeople, admPadTopStyle, admPadBottomStyle, onAdmScroll:(e)=>this._onVirtualScroll('admWindowStart',e,_admRowH,4), admCount:admFiltered.length.toLocaleString(), admHasSel:!!admSel, admNoSel:!admSel, admSelName,
       aTrainingImportTab:role==='admin'&&tab==='trainingimport', trainingImportFileName:this.state.trainingImportFileName||'', trainingImportHasFile:!!this.state.trainingImportFileName, trainingImportHasRows:(this.state.trainingImportRows||[]).length>0, trainingImportNoRows:(this.state.trainingImportRows||[]).length===0, trainingImportHasMsg:!!this.state.trainingImportMsg, trainingImportMsg:this.state.trainingImportMsg||'', trainingImportDetectedFormat:this.state.trainingImportDetectedFormat||'', trainingImportHasFormat:!!this.state.trainingImportDetectedFormat, trainingImportIgnored:this.state.trainingImportIgnored||0, trainingImportHasIgnored:(this.state.trainingImportIgnored||0)>0, trainingImportSheet:this.state.trainingImportSheet||'', trainingImportHasSheet:!!this.state.trainingImportSheet, trainingImportGenerateCerts:this.state.trainingImportGenerateCerts===true, onTrainingImportGenerateCerts:(e)=>this.setState({trainingImportGenerateCerts:e.target.checked}), onTrainingImportTemplate:()=>this.downloadTrainingImportTemplate(), onTrainingImportFile:(e)=>this.importTrainingRecordFile(e), onTrainingImportClear:()=>this.clearTrainingImport(), onTrainingImportApply:()=>this.applyTrainingImport(), trainingImportHeaders:['Row','Employee','Course','Completed','Expires','Type','Decision','Validation'], ...(()=>{const rr=this.state.trainingImportRows||[],ready=rr.filter(r=>r.status==='Ready').length,blocked=rr.filter(r=>r.status==='Blocked').length,dup=rr.filter(r=>r.status==='Duplicate').length,legacy=rr.filter(r=>r.status==='Ready'&&r.legacy).length,imported=rr.filter(r=>r.status==='Imported').length; const statusStyle=x=>x==='Ready'?['#E4F6EB','#1F8A4C']:x==='Imported'?['#E8F5F7','#127487']:x==='Duplicate'?['#FFF6D9','#8A6D00']:['#FCE4E1','#B42318']; return {trainingImportSummary:[{label:'Rows',value:rr.length,color:'#1F3864'},{label:'Ready',value:ready,color:'#1F9D55'},{label:'Legacy',value:legacy,color:'#667085'},{label:'Duplicates',value:dup,color:'#D99A00'},{label:'Blocked',value:blocked,color:'#D93025'}],trainingImportPreviewRows:rr.slice(0,250).map(r=>{const ss=statusStyle(r.status),legacy=!!r.legacy;return{...r,staff:r.staffName||'(unknown)',course:r.title||r.code||'—',type:legacy?'Legacy Course':(this.isComplianceCourse(r.code)?'Current / compliance':'Current / transcript'),typeBg:legacy?'#EEF1F8':(this.isComplianceCourse(r.code)?'#E4F6EB':'#EEF3FF'),typeFg:legacy?'#667085':(this.isComplianceCourse(r.code)?'#1F8A4C':'#2F5496'),statusBg:ss[0],statusFg:ss[1],rowBg:r.status==='Blocked'?'#FFF9F8':(r.status==='Duplicate'?'#FFFCF2':'#fff')}}),trainingImportApplyDisabled:ready===0,trainingImportApplyLabel:ready?('Import '+ready+' valid completion'+(ready===1?'':'s')):(imported?'Import complete':'No valid rows to import'),trainingImportApplyStyle:'border:0;border-radius:999px;background:'+(ready?'linear-gradient(135deg,#1F3864,#2F5496)':'#CBD5E1')+';color:#fff;font-weight:900;font-size:12.5px;padding:10px 18px;cursor:'+(ready?'pointer':'not-allowed')};})(),
       admCompTab:role==='admin'&&tab==='completions', compCourse:this.state.compCourse, onCompCourse:(e)=>this.compSetCourse(e.target.value), compDate:this.state.compDate, onCompDate:(e)=>this.compSetDate(e.target.value),
-      admPouringTab:role==='admin'&&tab==='pourings', pourTypeOpts:this.POURING_TYPES.map(x=>({v:x.code,label:x.label+' — '+x.form})), pourType:this.state.pourType, onPourType:(e)=>this.setState({pourType:e.target.value,pourExpManual:false,pourExp:this.compSuggestExp(e.target.value,this.state.pourDate)}), pourFormLabel:this.pouringType(this.state.pourType).form, pourRecv:this.state.pourRecv, onPourSetRecv:(e)=>this.pourSetRecv(e.target.value), pourFormLabel:this.pouringType(this.state.pourType).form, pourDate:this.state.pourDate, onPourDate:(e)=>this.pourSetDate(e.target.value), pourRnOpts:acceptingRnOpts, pourRn:this.state.pourRn, onPourRn:(e)=>this.setState({pourRn:e.target.value,pourRnOther:e.target.value==='__other__'?this.state.pourRnOther:''}), pourRnIsOther:this.state.pourRn==='__other__', pourRnNotOther:this.state.pourRn!=='__other__', pourRnOther:this.state.pourRnOther, onPourRnOther:(e)=>this.setState({pourRnOther:e.target.value}), pourExp:this.state.pourExp, onPourExp:(e)=>this.pourSetExp(e.target.value), pourExpHint:this.compSuggestExp(this.state.pourType,this.state.pourDate)||'One year after accepted date', pourNote:this.state.pourNote, onPourNote:(e)=>this.setState({pourNote:e.target.value}), pourFileName:this.state.pourFileName, pourFileMissing:!this.state.pourFile, pourSubmitDisabled:!this.state.pourFile, pourSubmitStyle:'width:100%;border:0;border-radius:999px;background:'+(!this.state.pourFile?'#AAB4C6':'linear-gradient(135deg,#1F3864,#2F5496)')+';color:#fff;font-weight:800;font-size:13px;padding:11px;cursor:'+(!this.state.pourFile?'not-allowed':'pointer')+';opacity:'+(!this.state.pourFile?'.78':'1'), onPourFile:(e)=>this.onPourFilePick(e), onRecordPouring:()=>this.recordPouring(), pourLog, pourHasLog:pourLog.length>0,
+      admPouringTab:role==='admin'&&tab==='pourings', pourTypeOpts:this.POURING_TYPES.map(x=>({v:x.code,label:x.label+' — '+x.form})), pourType:this.state.pourType, onPourType:(e)=>this.setState({pourType:e.target.value,pourExpManual:false,pourExp:this.compSuggestExp(e.target.value,this.state.pourDate)}), pourFormLabel:this.pouringType(this.state.pourType).form, pourRecv:this.state.pourRecv, onPourSetRecv:(e)=>this.pourSetRecv(e.target.value), pourDate:this.state.pourDate, onPourDate:(e)=>this.pourSetDate(e.target.value), pourRnOpts:acceptingRnOpts, pourRn:this.state.pourRn, onPourRn:(e)=>this.setState({pourRn:e.target.value,pourRnOther:e.target.value==='__other__'?this.state.pourRnOther:''}), pourRnIsOther:this.state.pourRn==='__other__', pourRnNotOther:this.state.pourRn!=='__other__', pourRnOther:this.state.pourRnOther, onPourRnOther:(e)=>this.setState({pourRnOther:e.target.value}), pourExp:this.state.pourExp, onPourExp:(e)=>this.pourSetExp(e.target.value), pourExpHint:this.compSuggestExp(this.state.pourType,this.state.pourDate)||'One year after accepted date', pourNote:this.state.pourNote, onPourNote:(e)=>this.setState({pourNote:e.target.value}), pourFileName:this.state.pourFileName, pourFileMissing:!this.state.pourFile, pourSubmitDisabled:!this.state.pourFile, pourSubmitStyle:'width:100%;border:0;border-radius:999px;background:'+(!this.state.pourFile?'#AAB4C6':'linear-gradient(135deg,#1F3864,#2F5496)')+';color:#fff;font-weight:800;font-size:13px;padding:11px;cursor:'+(!this.state.pourFile?'not-allowed':'pointer')+';opacity:'+(!this.state.pourFile?'.78':'1'), onPourFile:(e)=>this.onPourFilePick(e), onRecordPouring:()=>this.recordPouring(), pourLog, pourHasLog:pourLog.length>0,
       admRnTab:role==='admin'&&tab==='rncourses', rnCourseOpts:this.rnCourseOptionsCatalog().map(x=>({v:x.code,label:x.label})), rnCourse:this.state.rnCourse, onRnCourse:(e)=>this.setState({rnCourse:e.target.value}), rnDate:this.state.rnDate, onRnDate:(e)=>this.setState({rnDate:e.target.value}), rnSlmsId:this.state.rnSlmsId, onRnSlmsId:(e)=>this.setState({rnSlmsId:e.target.value}), rnNote:this.state.rnNote, onRnNote:(e)=>this.setState({rnNote:e.target.value}), rnFileName:this.state.rnFileName, rnFileMissing:!this.state.rnFile, rnSubmitDisabled:!this.state.rnFile, rnSubmitStyle:'width:100%;border:0;border-radius:999px;background:'+(!this.state.rnFile?'#AAB4C6':'linear-gradient(135deg,#0E7C86,#1593A0)')+';color:#fff;font-weight:800;font-size:13px;padding:11px;cursor:'+(!this.state.rnFile?'not-allowed':'pointer')+';opacity:'+(!this.state.rnFile?'.78':'1'), onRnFile:(e)=>this.onRnFilePick(e), onRecordRnCourse:()=>this.recordRnCourse(), rnPeople, rnPadTopStyle, rnPadBottomStyle, onRnScroll:(e)=>this._onVirtualScroll('rnWindowStart',e,_rnRowH,4), rnCount:rnFiltered.length.toLocaleString(), rnHasSel:!!(admSel&&this.isNurse(admSel)), rnNoSel:!(admSel&&this.isNurse(admSel)), rnSelName:(admSel&&this.isNurse(admSel))?admSelName:'', rnLog, rnHasLog:rnLog.length>0,
       admUploadedDocsTab:role==='admin'&&tab==='uploadedcerts', uploadedDocRows, uploadedDocHasRows:uploadedDocRows.length>0, uploadedDocEmpty:uploadedDocRows.length===0, uploadedDocCount:uploadedDocsFiltered.length.toLocaleString(), uploadedDocShowing:Math.min(uploadedDocsFiltered.length,_udShow).toLocaleString(), uploadedDocKinds:[{v:'',label:'All document types'}].concat(uploadedDocKinds), uploadedDocLocs:[{v:'',label:'All locations'}].concat(uploadedDocLocs), uploadedDocStatuses:[{v:'',label:'All statuses'}].concat(uploadedDocStatuses), uploadedDocSearch:this._sd('docLibSearch'), uploadedDocType:this.state.docLibType, uploadedDocLoc:this.state.docLibLoc, uploadedDocStatus:this.state.docLibStatus, uploadedDocShow:String(this.state.docLibShow||100), onUploadedDocSearch:(e)=>this._searchInput('docLibSearch',e.target.value), onUploadedDocType:(e)=>this.setState({docLibType:e.target.value}), onUploadedDocLoc:(e)=>this.setState({docLibLoc:e.target.value}), onUploadedDocStatus:(e)=>this.setState({docLibStatus:e.target.value}), onUploadedDocShow:(e)=>this.setState({docLibShow:Number(e.target.value)||100}), onUploadedDocClear:()=>this.setState({docLibSearch:'',docLibType:'',docLibLoc:'',docLibStatus:''}), uploadedDocTotal:uploadedDocCounts.total.toLocaleString(), uploadedDocExternal:uploadedDocCounts.external.toLocaleString(), uploadedDocRn:uploadedDocCounts.rn.toLocaleString(), uploadedDocPouring:uploadedDocCounts.pouring.toLocaleString(), uploadedDocPending:uploadedDocCounts.pending.toLocaleString(),
       admXcTab:role==='admin'&&tab==='extcert', xcCourseOpts:this.externalCertificateCourseOptions(), xcCourse:this.state.xcCourse, onXcCourse:(e)=>this.xcSetCourse(e.target.value), xcDate:this.state.xcDate, onXcDate:(e)=>this.xcSetDate(e.target.value), xcExp:this.state.xcExp, onXcExp:(e)=>this.xcSetExp(e.target.value), xcExpHint:this.xcHint(), xcExpDisabled:(this.extCertType(this.state.xcCourse).exp==='none'), xcNote:this.state.xcNote, onXcNote:(e)=>this.setState({xcNote:e.target.value}), xcFileName:this.state.xcFileName, onXcFile:(e)=>this.onXcFilePick(e), onRecordXc:()=>this.recordExtCertDirect(), compNote:this.state.compNote, onCompNote:(e)=>this.setState({compNote:e.target.value}), onRecordComp:()=>this.recordCompletion(), compCourseOpts:(role==='admin'&&tab==='completions')?this.independentCompletionCourseOptions():[], compLog, compHasLog:compLog.length>0, compExp:(this.state.compExpManual?this.state.compExp:this.independentExpirationFor(this.state.compCourse,this.state.compDate,this.state.admStaff)), onCompExp:(e)=>this.compSetExp(e.target.value), compExpPlaceholder:(this.independentCourseExpiryRule(this.state.compCourse,this.state.admStaff).kind==='manual'?'Enter approved expiration date':'Automatically generated'), compExpHint:this.compExpirationHint(this.state.compCourse,this.state.compDate,this.state.admStaff), onCompCertFile:(e)=>this.onCompCertFilePick(e), compCertName:this.state.compCertName,
@@ -16677,7 +16871,7 @@ class Component extends DCLogic {
       recActiveCount:(role==='admin'&&tab==='records')?this.getActiveStaff().length.toLocaleString():'0', recArchivedCount:(role==='admin'&&tab==='records')?(this.state.docs.archived||[]).length.toLocaleString():'0',
       schRows, schFilters, schEmpty, schHasRows:!schEmpty, schCount:schCounts.all,
       mTeamLine:(isMgrUser&&this.managerScopeSplit(cu,scopedRoster).chain>0)?`${u.name} · ${mTeamSize} staff (assigned locations + reporting line)`:`${u.name} · ${mTeamSize} staff (assigned locations)`, mTeamSize, mRed, mDueSoon, mPct,
-      mPendingReqs, mHasPending:mPendingReqs.length>0, mNoPending:mPendingReqs.length===0, mAllReqs, mHasReqs:mAllReqs.length>0, mNoReqs:mAllReqs.length===0 && mPortalReqs.length===0, goMRequests:()=>this.go('requests'),
+      mPendingReqs, mHasPending:mPendingReqs.length>0, mNoPending:mPendingReqs.length===0, mAllReqs, mHasReqs:mAllReqs.length>0, mNoReqs:mAllReqs.length===0 && mPortalReqs.length===0, goMRegister:()=>this.go('register'), goMNeeds:()=>this.go('needs'), goMRequests:()=>this.go('requests'),
       mPortalReqs, mHasPortalReqs:mPortalReqs.length>0,
       locOptions, mLoc:this.state.mLoc, mSearch:this._sd('mSearch'), onMgrLoc:(e)=>this.setState({mLoc:e.target.value}), onMgrSearch:(e)=>this._searchInput('mSearch',e.target.value), mTeamCountLabel, repShow:String(this.state.repShow), onRepShow:(e)=>this.setState({repShow:+e.target.value}), onMgrColorReportExportWorkbook:()=>this.exportManagerComplianceWorkbook(), pickShow:String(this.state.pickShow), onPickShow:(e)=>{this._resetVirtualList('adm-staff-scroll');this._resetVirtualList('rn-staff-scroll');this.setState({pickShow:+e.target.value,admWindowStart:0,rnWindowStart:0});},
       matrixCols, matrixHeads, matrixRows, matrixError, matrixFlagged, matrixEmpty, matrixHasRows, matrixHasFlagged:matrixFlagged>0, mStaffCards,
@@ -16702,23 +16896,13 @@ class Component extends DCLogic {
           btnLabel: stStatus(c)==='Completed'?'Review':(stStatus(c)==='In Progress'?'Continue':'Start course'),
           statusBg: stStatus(c)==='Completed'?'#E4F6EB':(stStatus(c)==='In Progress'?'#FFF6D9':'#EEF1F8'), statusFg: stStatus(c)==='Completed'?'#1F9D55':(stStatus(c)==='In Progress'?'#B68900':'#667085'),
           isDone: stStatus(c)==='Completed'&&c.certEnabled!==false, onOpen:()=>this.openCoursePlayer(c.id), onCert:()=>this.openCertFor(sid,c.code||('SCORM_'+c.id)) })):[];
-        if(role==='staff'&&sid&&meRec&&this.SS()&&this.SS().vtAssignmentsForStaff){ const _ss=this.SS();
-          _ss.vtAssignmentsForStaff(sid).forEach(a=>{ const v=_ss.vtVideoById(a.video_id); if(!v||!v.active) return;
-            const p=_ss.vtProgressFor(v.id, sid); const pct0=(p&&p.watched_pct)||0; const passed=!!(p&&p.passed_at);
-            const cpDone=((this.state.courseProg||{})[this.progKey('vtc:'+v.id,sid)]||{}).status==='Completed';
-            const compDone=!!(v.compliance_code && this._videoCompletionPresence().has(String(sid)+'|'+String(v.compliance_code)));
-            const done=passed||cpDone||compDone; const pct=done?100:pct0;
-            const status=done?'Completed':((pct0>0||((p&&p.attempts)||[]).length>0)?'In Progress':'Not Started');
-            const dueDate=this.effectiveAssignmentDue(meRec,v,a.due_date);
-            sOnline.push({ id:'vtc:'+v.id, title:v.title, cat:'Video training', type:(dueDate?('Due '+dueDate):(v.compliance_code==='ART'?'Not due until orientations are complete':'Self-paced')), req:'You', status, pct,
-              btnLabel: done?'Review':(status==='In Progress'?'Continue':'Start course'),
-              statusBg: done?'#E4F6EB':(status==='In Progress'?'#FFF6D9':'#EEF1F8'),
-              statusFg: done?'#1F9D55':(status==='In Progress'?'#B68900':'#667085'),
-              isDone: done && !!(v.compliance_code&&this.issuesCertificate(v.compliance_code)),
-              onOpen:()=>this.playVideoCourse(v.id, sid), onCert:()=>this.openCert(v.compliance_code||'') }); }); }
+        // Assigned video courses are listed once, under "Assigned video training" (sVtRows); they are
+        // not repeated here (STF-06). Count them so the empty state stays correct.
+        let _vtCount=0; if(role==='staff'&&sid&&meRec&&this.SS()&&this.SS().vtAssignmentsForStaff){ const _ss=this.SS(); _vtCount=_ss.vtAssignmentsForStaff(sid).filter(a=>{ const v=_ss.vtVideoById(a.video_id); return v&&v.active; }).length; }
         // manager online progress for caseload
         const mScope = (role==='manager'&&tab==='online')? (typeof scopedRoster!=='undefined'?scopedRoster:this.state.roster):[];
-        const mOnline=(role==='manager'&&tab==='online')? mScope.slice(0,200).flatMap(st=> this.ocFor(st).map(c=>{ const p=this.getProg(c.id,st.id); return {staff:st.name, course:c.title, status:p.status, pct:p.pct, completed:p.completed||'\u2014', cert: p.status==='Completed'&&c.certEnabled?'Yes':'No', sBg:p.status==='Completed'?'#E4F6EB':(p.status==='In Progress'?'#FFF6D9':'#EEF1F8'), sFg:p.status==='Completed'?'#1F9D55':(p.status==='In Progress'?'#B68900':'#667085')}; })):[];
+        const _mOnlineSorted=(role==='manager'&&tab==='online')?mScope.slice().sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''))):[];
+        const mOnline=(role==='manager'&&tab==='online')? _mOnlineSorted.slice(0,200).flatMap(st=> this.ocFor(st).map(c=>{ const p=this.getProg(c.id,st.id); return {staff:st.name, course:c.title, status:p.status, pct:p.pct, completed:p.completed||'\u2014', cert: p.status==='Completed'&&c.certEnabled?'Yes':'No', sBg:p.status==='Completed'?'#E4F6EB':(p.status==='In Progress'?'#FFF6D9':'#EEF1F8'), sFg:p.status==='Completed'?'#1F9D55':(p.status==='In Progress'?'#B68900':'#667085')}; })):[];
         // admin content library
         const adminCourses=(role==='admin'&&tab==='content')?this.state.onlineCourses.map(c=>({id:c.id,title:c.title,cat:c.cat,type:c.type,req:c.requiredFor,exp:c.expiration,mods:c.modules.length,active:c.active,version:'v'+(c.version||1),verHist:(c.versionHistory||[]).map(h=>'v'+h.v+' ('+h.date+'): '+h.note).join(' · '),onPublishVer:()=>this.publishNewVersion(c.id),showPublishVer:!c.scorm,isScorm:!!c.scorm,scormLabel:c.scorm?('SCORM '+c.scorm.version):'',scormMeta:c.scorm?((c.scorm.fileName||'package')+' · '+(c.scorm.fileCount||0)+' files · '+(((c.scorm.bytes||0)/1048576).toFixed(1))+' MB'):'',onPreview:()=>this.launchScormCourse(c.id,{preview:true}),
           statusBg:c.active?'#E4F6EB':'#FCE4E1', statusFg:c.active?'#1F9D55':'#D93025', statusLabel:c.active?'Active':'Inactive', onToggle:()=>this.toggleCourseActive(c.id)})):[];
@@ -16733,35 +16917,44 @@ class Component extends DCLogic {
           const updateAck=(mod&&mod.type==='update'&&ssCP.vtUpdateAcknowledgement)?ssCP.vtUpdateAcknowledgement(mod.updateId,sid):null;
           const updateSrc=(mod&&mod.type==='update')?(mod.assetSrc||''):'';
           const updateIsImage=!!(updateSrc&&(/^data:image\//i.test(updateSrc)||/^https?:\/\/.*\.(png|jpe?g|gif|webp)(\?|#|$)/i.test(updateSrc)||/^image\//i.test((mod&&mod.assetType)||'')));
-          const quizScore = (mod&&mod.type==='quiz')?this.cpQuizScore(pc):0; const quizPass = quizScore>=(pc.passing||80);
+          // Pass/fail comes from the RECORDED attempt (the shared store for video courses), never from
+          // answers re-picked after submitting.
+          const _vtQ=(mod&&mod.type==='quiz'&&pc.vtVideoId)?ssCP.vtVideoForStaff(pc.vtVideoId,sid):null; const _vtQP=_vtQ?ssCP.vtProgressFor(_vtQ.id,sid,_vtQ.version_number):null;
+          const quizScore = (mod&&mod.type==='quiz')?(this.state.cpLastScore==null?0:this.state.cpLastScore):0;
+          const quizPass = (mod&&mod.type==='quiz')?(pc.vtVideoId?(!!(_vtQP&&_vtQP.passed_at)||(this.state.cpQuizShown&&this.state.cpQuizPassed===true&&!ssCP.vtFinal(pc.vtVideoId,sid).length)):(this.state.cpQuizShown&&this.state.cpQuizPassed===true)):false;
+          const quizLeft = _vtQ?Math.max(0,(_vtQ.max_attempts||3)-(((_vtQP&&_vtQP.attempts)||[]).length)):null;
+          const quizFailed = !!(mod&&mod.type==='quiz'&&this.state.cpQuizShown&&!quizPass);
           let canNext=false, nextLabel='Continue', onNext=()=>this.cpNext();
           if(mod){ if(mod.type==='video'){ canNext = rv? rvDone : (this.state.cpWatch>=100 && (!mod.embed || !mod.embed.required || this.state.cpEmbedDone)); }
             else if(mod.type==='document'){ canNext = true; }
             else if(mod.type==='update'){ canNext=!!updateAck; if(pc.updateOnly&&stp===total-1){ nextLabel='Finish update'; onNext=()=>this.finishCourseUpdates(pc.vtVideoId,sid); } }
-            else if(mod.type==='quiz'){ canNext = this.state.cpQuizShown && quizPass; nextLabel='Continue'; }
-            else if(mod.type==='attestation'){ canNext = this.state.cpAttest && (!pc.vtVideoId || (this.state.cpSig||'').trim().length>0); }
+            else if(mod.type==='quiz'){ canNext = quizPass; nextLabel='Continue'; }
+            else if(mod.type==='attestation'){ canNext = this.state.cpAttest && (!pc.vtVideoId || this.signatureMatchesName(this.state.cpSig,(meRec&&meRec.name)||'')); }
             else if(mod.type==='certificate'){ canNext=true; nextLabel='Finish & post completion'; onNext=()=>this.finishOnlineCourse(); }
             if(stp===total-1 && mod.type!=='certificate' && mod.type!=='update'){ nextLabel='Finish & post completion'; onNext=()=>this.finishOnlineCourse(); }
           }
           cp={ title:pc.title, step:stp+1, total, pctBar:Math.round((stp)/(total)*100)+'%',
             modType:mod?(mod.type==='update'?'required update':mod.type):'', modTitle:mod?mod.title:'', isVideo:mod&&mod.type==='video', isDoc:mod&&mod.type==='document', isUpdate:mod&&mod.type==='update', isQuiz:mod&&mod.type==='quiz', isAttest:mod&&mod.type==='attestation', isCert:mod&&mod.type==='certificate',
-            vidDur:mod&&mod.dur||'', watch:this.state.cpWatch, watched:this.state.cpWatch>=100, onSimWatch:()=>this.cpSimWatch(), isRealVideo:!!rv, isSimVideo:(mod&&mod.type==='video'&&!rv), vid: rv? this.vtPlayerVM(rv, sid, cuu) : null, needSig:!!pc.vtVideoId, sigText:(this.state.cpSig||''), onSig:(e)=>this.cpSetSig(e.target.value),
+            vidDur:mod&&mod.dur||'', watch:this.state.cpWatch, watched:this.state.cpWatch>=100, onSimWatch:()=>this.cpSimWatch(), isRealVideo:!!rv, isSimVideo:(mod&&mod.type==='video'&&!rv), vid: rv? this.vtPlayerVM(rv, sid, cuu) : null, needSig:!!pc.vtVideoId, sigText:(this.state.cpSig||''), sigMismatch:!!(pc.vtVideoId&&(this.state.cpSig||'').trim()&&!this.signatureMatchesName(this.state.cpSig,(meRec&&meRec.name)||'')), sigHint:'Type your name as it appears on your staff record: '+((meRec&&meRec.name)||''), onSig:(e)=>this.cpSetSig(e.target.value),
             hasEmbed: !!(mod&&mod.embed), embedShown: this.state.cpWatch>=100 && mod&&mod.embed && !this.state.cpEmbedDone, embedQ:mod&&mod.embed?mod.embed.q:'', embedAt:mod&&mod.embed?mod.embed.at:'',
             embedOpts:(mod&&mod.embed?mod.embed.opts:[]).map((o,i)=>({text:o, picked:this.state.cpEmbedAns===i, correct:mod.embed.answer===i, onPick:()=>this.cpAnswerEmbed(i), style:`display:block;width:100%;text-align:left;border:1.5px solid ${this.state.cpEmbedAns===i?(mod.embed.answer===i?'#1F9D55':'#D93025'):'#CBD5EE'};background:${this.state.cpEmbedAns===i?(mod.embed.answer===i?'#E4F6EB':'#FCE4E1'):'#fff'};border-radius:10px;padding:10px 13px;margin-bottom:8px;cursor:pointer;font-size:13.5px;font-weight:700;color:#152A4D`})),
             embedAnswered:this.state.cpEmbedAns!==null, embedCorrect:mod&&mod.embed&&this.state.cpEmbedAns===mod.embed.answer, onEmbedContinue:()=>this.cpEmbedContinue(),
             docAck:mod&&mod.ack||'', isLastDoc:false,
             updateKind:mod&&mod.type==='update'?(mod.kind==='slide'?'Slide / PDF update':'Written update'):'', updateBody:mod&&mod.type==='update'?(mod.body||''):'', updateHasBody:!!(mod&&mod.type==='update'&&mod.body), updateHasAsset:!!updateSrc, updateIsImage, updateIsFrame:!!updateSrc&&!updateIsImage, updateSrc, updatePublished:(mod&&mod.type==='update'&&mod.publishedAt)?('Published '+new Date(mod.publishedAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})):'', updateDue:(mod&&mod.type==='update'&&mod.dueDate)?('Due '+mod.dueDate):'',
             updateAcked:!!updateAck, updateCanAck:!updateAck, updateAckLine:updateAck?('✓ Acknowledged '+new Date(updateAck.acknowledged_at).toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'})):'You must acknowledge this update before continuing in the course.', onUpdateAck:()=>this.vtAcknowledgeUpdate(mod.updateId,sid,(cuu&&cuu.name)||sid),
-            quizQs:(mod&&mod.type==='quiz'?mod.questions:[]).map((qq,qi)=>({q:qq.q, opts:qq.opts.map((o,oi)=>({text:o, picked:this.state.cpQuizAns[qi]===oi, correct:this.state.cpQuizShown&&qq.answer===oi, wrong:this.state.cpQuizShown&&this.state.cpQuizAns[qi]===oi&&qq.answer!==oi, onPick:()=>this.cpSetQuiz(qi,oi), style:`display:block;width:100%;text-align:left;border:1.5px solid ${this.state.cpQuizShown?(qq.answer===oi?'#1F9D55':(this.state.cpQuizAns[qi]===oi?'#D93025':'#CBD5EE')):(this.state.cpQuizAns[qi]===oi?'#2F5496':'#CBD5EE')};background:${this.state.cpQuizShown&&qq.answer===oi?'#E4F6EB':(this.state.cpQuizShown&&this.state.cpQuizAns[qi]===oi?'#FCE4E1':(this.state.cpQuizAns[qi]===oi?'#F2F6FD':'#fff'))};border-radius:10px;padding:9px 12px;margin-bottom:7px;cursor:pointer;font-size:13px;font-weight:700;color:#152A4D`}))})),
-            quizAllAnswered: mod&&mod.type==='quiz'? mod.questions.every((q,i)=>this.state.cpQuizAns[i]!==undefined):false, quizShown:this.state.cpQuizShown, quizScore, quizPass, onSubmitQuiz:()=>this.cpSubmitQuiz(),
+            quizQs:(mod&&mod.type==='quiz'?mod.questions:[]).map((qq,qi)=>({q:qq.q, opts:qq.opts.map((o,oi)=>({text:o, picked:this.state.cpQuizAns[qi]===oi, onPick:()=>this.cpSetQuiz(qi,oi), style:`display:block;width:100%;text-align:left;border:1.5px solid ${this.state.cpQuizAns[qi]===oi?'#2F5496':'#CBD5EE'};background:${this.state.cpQuizAns[qi]===oi?'#F2F6FD':'#fff'};border-radius:10px;padding:9px 12px;margin-bottom:7px;cursor:${this.state.cpQuizShown?'default':'pointer'};font-size:13px;font-weight:700;color:#152A4D`}))})),
+            quizAllAnswered: mod&&mod.type==='quiz'? (!this.state.cpQuizShown&&mod.questions.every((q,i)=>this.state.cpQuizAns[i]!==undefined)):false, quizShown:this.state.cpQuizShown, quizScore, quizPass, quizFailed, onSubmitQuiz:()=>this.cpSubmitQuiz(),
+            quizResultLine: !this.state.cpQuizShown?'':(quizPass?('Passed — score '+quizScore+'%. Select Continue.'):('Not passed — score '+quizScore+'%. A score of '+(_vtQ?(_vtQ.passing_score||80):(pc.passing||80))+'% is required.'+(quizLeft!=null?(' '+quizLeft+' attempt'+(quizLeft===1?'':'s')+' left.'):''))),
+            quizResultStyle: 'border-radius:11px;padding:11px 14px;font-size:13px;font-weight:800;margin-top:4px;'+(quizPass?'background:#E4F6EB;color:#1F7A44':'background:#FCE4E1;color:#A61B12'),
+            quizCanRetake: quizFailed && (quizLeft==null||quizLeft>0), quizNoAttempts: quizFailed && quizLeft===0, onRetakeQuiz:()=>this.cpRetakeQuiz(),
             attestText:mod&&mod.text||'', attestChecked:this.state.cpAttest, onAttest:()=>this.cpToggleAttest(),
             showSaveExit: !(mod && (mod.type==='quiz'||mod.type==='attestation'||mod.type==='certificate')),
             canNext, nextLabel, onNext, disabledNext:!canNext, nextStyle:`border:0;border-radius:999px;color:#fff;font-weight:800;font-size:13px;padding:11px 20px;cursor:${canNext?'pointer':'not-allowed'};background:${canNext?'linear-gradient(135deg,#1F3864 0%,#2F5496 100%)':'#C9D2E3'}`, onClose:()=>this.closeCoursePlayer() };
         }
         return {
-          sTrainingsTab: role==='staff'&&!sAccountInactive&&tab==='trainings', sOnline, sOnlineEmpty:sOnline.length===0,
-          mOnlineTab: role==='manager'&&tab==='online', mOnline, mOnlineEmpty:mOnline.length===0,
-          ...(()=>{ if(role!=='manager'||tab!=='home') return { mNotifRows:[], mNotifHas:false, mNotifEmpty:false, mNotifUnread:0, mNotifHasUnread:false, onMarkMgrNotifsRead:()=>{}, mProgRows:[], mProgHas:false, mProgEmpty:false };
+          sTrainingsTab: role==='staff'&&!sAccountInactive&&tab==='trainings', sOnline, sOnlineEmpty:sOnline.length===0&&_vtCount===0, sOnlineHeader:sOnline.length>0&&_vtCount>0,
+          mOnlineTab: role==='manager'&&tab==='online', mOnline, mOnlineEmpty:mOnline.length===0, mOnlineMore:_mOnlineSorted.length>200, mOnlineMoreLine:'Showing staff 1\u2013200 of '+_mOnlineSorted.length.toLocaleString()+' (A\u2013Z).',
+          ...(()=>{ if(role!=='manager'||tab!=='home') return { mNotifRows:[], mNotifHas:false, mNotifEmpty:false, mNotifUnread:0, mNotifHasUnread:false, onMarkMgrNotifsRead:()=>{}, mProgRows:[], mProgHas:false, mProgEmpty:false, mProgMore:false, mProgMoreLine:'', mOocRows:[], mOocHas:false, mOocEmpty:false, mOocLine:'', mOocMore:false };
             const scope=(typeof scopedRoster!=='undefined')?scopedRoster:this.state.roster;
             const ids=new Set(scope.map(r=>r.id));
             const key='hasc_mgr_notif_seen:'+((cuu&&(cuu.empId||cuu.staffId))||'mgr');
@@ -16779,9 +16972,17 @@ class Component extends DCLogic {
                 detail:(done? ('Watched '+((n.watched!=null?n.watched:100))+'%'+(n.score!=null?(' · Score '+n.score+'%'):'')) : ''),
                 rel:this.vtNotifRel(n.t||Date.now()), abs:n.ts, unread:((n.t||0)>seen) }; });
             const unread=list.filter(n=>(n.t||0)>seen).length;
-            const prog=scope.slice(0,300).map(st=>this.trainingProgressRow(st)).sort((a,b)=>a.name.localeCompare(b.name));
+            const _byName=scope.slice().sort((a,b)=>String(a.name||'').localeCompare(String(b.name||'')));
+            const prog=_byName.slice(0,300).map(st=>this.trainingProgressRow(st));
+            // UX-03: who on my team is out of compliance — same rows as the admin Overdue Follow-up,
+            // scoped to this manager, worst first.
+            const ooc=this.followUpRows({list:scope}); const _oocShow=ooc.slice(0,15);
+            const mOocRows=_oocShow.map(x=>({name:x.name,meta:(x.pos||'')+(x.loc?(' \u00b7 '+(this.canonicalLocName(x.staff)||x.loc)):'')+' \u00b7 ID '+x.id,count:x.overdue.length+' overdue',courses:x.overdue.map(c=>this.COURSE_NAME[c]||this.SHORT_NAME[c]||c).join(', ')}));
             return { mNotifRows:rows, mNotifHas:list.length>0, mNotifEmpty:list.length===0, mNotifUnread:unread, mNotifHasUnread:unread>0,
-              onMarkMgrNotifsRead:()=>this.markMgrNotifsRead(), mProgRows:prog, mProgHas:prog.length>0, mProgEmpty:prog.length===0 };
+              onMarkMgrNotifsRead:()=>this.markMgrNotifsRead(), mProgRows:prog, mProgHas:prog.length>0, mProgEmpty:prog.length===0,
+              mProgMore:scope.length>300, mProgMoreLine:'Showing first 300 of '+scope.length.toLocaleString()+' staff (A\u2013Z).',
+              mOocRows, mOocHas:ooc.length>0, mOocEmpty:ooc.length===0, mOocMore:ooc.length>_oocShow.length,
+              mOocLine:ooc.length?(ooc.length.toLocaleString()+' of '+scope.length.toLocaleString()+' staff have at least one overdue required training'+(ooc.length>_oocShow.length?(' \u00b7 showing the '+_oocShow.length+' with the most overdue'):'')+'.'):'' };
           })(),
           aContentTab: role==='admin'&&tab==='content', adminCourses, certCfgRows, certCfgIssued, certCfgTotal:certCfgRows.length, onGoCourseInfo:()=>this.go('courseinfo'),
           ...this.vtVM(role, tab, cu),
@@ -16881,23 +17082,26 @@ class Component extends DCLogic {
       ...(()=>{ if(role!=='admin'||tab!=='dash') return { aProgRows:[], aProgHas:false, aProgEmpty:false, aProgSearch:'', aProgLoc:'', aProgLocOpts:[], aProgCountLabel:'', aProgPadTopStyle:'height:0', aProgPadBottomStyle:'height:0', onAProgScroll:()=>{}, onAProgSearch:()=>{}, onAProgLoc:()=>{}, aProgMore:false, aProgMoreLine:'' };
         const q=this._normSearch(this.state.aProgSearch);
         const selectedLoc=this.state.aProgLoc||'';
-        const base=(this.state.roster||[]).filter(r=>!r.archived);
+        const base=this.activeStaffList();
         // Resolve each location once; staff name/ID matching uses the prebuilt index.
         const tagged=base.map(st=>({st,loc:this.canonicalLocName(st)}));
         const locationNames=[...new Set(tagged.map(x=>x.loc).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
         const locationScoped=selectedLoc?tagged.filter(x=>x.loc===selectedLoc):tagged;
         const match=q?locationScoped.filter(x=>this._staffSearchText(x.st,'nameId').includes(q)):locationScoped;
-        const sorted=match.slice(0,300).map(x=>({...this.trainingProgressRow(x.st),loc:x.loc})).sort((a,b)=>a.name.localeCompare(b.name));
+        const sorted=match.slice().sort((a,b)=>String(a.st.name||'').localeCompare(String(b.st.name||''))).slice(0,300).map(x=>({...this.trainingProgressRow(x.st),loc:x.loc}));
         const _apRowH=72,_apWindow=16,_apMaxStart=Math.max(0,sorted.length-1),_apStart=Math.min(Math.max(0,this.state.aProgWindowStart||0),_apMaxStart),_apEnd=Math.min(sorted.length,_apStart+_apWindow),rows=sorted.slice(_apStart,_apEnd);
         const countText=match.length.toLocaleString()+' staff match'+(match.length===1?'es':'')+(selectedLoc?' at '+selectedLoc:' across all locations');
         return { aProgRows:rows, aProgHas:sorted.length>0, aProgEmpty:sorted.length===0, aProgSearch:this._sd('aProgSearch'), aProgLoc:selectedLoc,
           aProgLocOpts:[{v:'',label:'All locations'}].concat(locationNames.map(name=>({v:name,label:name}))), aProgCountLabel:countText,
           aProgPadTopStyle:'height:'+(_apStart*_apRowH)+'px', aProgPadBottomStyle:'height:'+Math.max(0,(sorted.length-_apEnd)*_apRowH)+'px', onAProgScroll:(e)=>this._onVirtualScroll('aProgWindowStart',e,_apRowH,3),
           onAProgSearch:(e)=>this._searchInput('aProgSearch',e.target.value,{aProgWindowStart:0},undefined,'aprog-staff-scroll'), onAProgLoc:(e)=>{this._resetVirtualList('aprog-staff-scroll');this.setState({aProgLoc:e.target.value,aProgWindowStart:0});},
-          aProgMore:match.length>300, aProgMoreLine:'Showing 300 of '+match.length+' staff — refine the location or staff-name filter to narrow.' };
+          aProgMore:match.length>300, aProgMoreLine:'Showing first 300 of '+match.length.toLocaleString()+' staff (A–Z) — refine the location or staff-name filter to narrow.' };
       })(),
       aSystemTab: role==='admin'&&tab==='system',
       aRuleDiag: role==='admin'&&tab==='rulediag',
+      ...(()=>{ if(!(role==='admin'&&tab==='qa')) return {aQaTab:false,qaTests:[],qaSummary:{pass:0,fail:0,total:0},qaLastRun:'',onRunAllQa:()=>{}};
+        let r; try{ r=this.qaResults(); }catch(e){ r=[{name:'QA runtime error',expected:'suite runs',actual:String((e&&e.message)||e),help:'',pass:'#D93025',badge:'FAIL',badgeBg:'#FCE4E1'}]; }
+        const fail=r.filter(x=>x.badge==='FAIL').length; return {aQaTab:true,qaTests:r,qaSummary:{pass:r.length-fail,fail,total:r.length},qaLastRun:this.state.qaLastRun||'On open',onRunAllQa:()=>this.runAllQa()}; })(),
       rdStaffId:this.state.rdStaffId, rdCode:this.state.rdCode,
       onRdStaff:(e)=>this.setState({rdStaffId:e.target.value}), onRdCode:(e)=>this.setState({rdCode:e.target.value}),
       rdStaffOpts:(role==='admin'&&tab==='rulediag')?[{v:'',label:'Select a staff member…'}].concat((this.state.roster||[]).filter(r=>!(new Set(this.state.docs.archived||[])).has(r.id)).slice().sort((a,b)=>(a.name||'').localeCompare(b.name||'')).slice(0,1500).map(r=>({v:r.id,label:(r.name||('ID '+r.id))+' — '+(r.pos||'')+' @ '+(r.loc||'')}))):[],
@@ -16958,7 +17162,7 @@ class Component extends DCLogic {
       instrRows:(role==='admin'&&tab==='instructors')?(this.state.instructors||[]).filter(it=>this.state.instrFilter==='all'?true:(this.state.instrFilter==='active'?it.status==='active':it.status==='inactive')).map(it=>{ const upcoming=this.state.sessions.filter(s=>!s.certified&&(s.instructor||'').split(',').map(x=>x.trim()).includes(it.fullName)); const last=this.state.sessions.filter(s=>(s.instructor||'').split(',').map(x=>x.trim()).includes(it.fullName)).slice(-1)[0]; const isActive=it.status==='active'; return {id:it.instructorId, name:it.fullName, email:it.email||'\u2014', phone:it.phone||'', specialties:it.specialties||'\u2014', status:it.status, statusBg:isActive?'#E4F6EB':'#FCE4E1', statusFg:isActive?'#1F9D55':'#D93025', statusLabel:isActive?'Active':'Inactive', upcomingCount:upcoming.length, lastSession:last?(last.title+' \u00b7 '+last.date):'\u2014', onEdit:()=>this.startEditInstructor(it.instructorId), onToggle:()=>this.setInstructorActive(it.instructorId,!isActive), toggleLabel:isActive?'Deactivate':'Reactivate' }; }):[],
       instrCounts:(role==='admin'&&tab==='instructors')?(()=>{ const a=(this.state.instructors||[]); let active=0,inactive=0; a.forEach(i=>{if(i.status==='active')active++;else if(i.status==='inactive')inactive++;}); return {active,inactive,all:a.length}; })():{active:0,inactive:0,all:0},
       sysGroups:(role==='admin'&&tab==='system')?[
-        {g:'Diagnostics & Audit', accent:'#D9730D', items:[{label:'Compliance Rule Diagnostic',tab:'rulediag',desc:'Trace one staff member + course through requirement, due-date, equivalency, override, and compliance-color logic.'},{label:'Audit Trail & Packet',tab:'audit',desc:'Review compliance events and compile a per-staff audit packet.'},{label:'Duplicate Completions',tab:'dupes',desc:'Find staff/course/date completions recorded more than once and merge them, keeping the richest record.'}]},
+        {g:'Diagnostics & Audit', accent:'#D9730D', items:[{label:'Compliance Rule Diagnostic',tab:'rulediag',desc:'Trace one staff member + course through requirement, due-date, equivalency, override, and compliance-color logic.'},{label:'Audit Trail & Packet',tab:'audit',desc:'Review compliance events and compile a per-staff audit packet.'},{label:'Duplicate Completions',tab:'dupes',desc:'Find staff/course/date completions recorded more than once and merge them, keeping the richest record.'},{label:'QA Checks',tab:'qa',desc:'Run outcome checks of the compliance rules, aggregation and data integrity against copies of the live data (nothing is changed).'}]},
         {g:'System Administration', accent:'#7A5Bd0', items:[{label:'Instructor Management',tab:'instructors',desc:'Add, edit, deactivate/reactivate instructors and manage assignment availability.'},{label:'Catalog',tab:'catalog',desc:'Review the operational course catalog and recertification rules.'},{label:'Staff Profiles',tab:'profiles',desc:'Open a 360° staff record and printable audit binder.'},{label:'Operations',tab:'operations',desc:'Review agency renewal forecasts and at-risk lists.'},{label:'Backup',tab:'backup',desc:'Export or restore recorded LMS data.'}]}
       ].map(grp=>({...grp, items:grp.items.map(it=>({...it, accent:grp.accent, cardStyle:`text-align:left;border:1px solid #E3E8F5;border-left:4px solid ${grp.accent};border-radius:12px;background:#fff;padding:14px 15px;cursor:pointer;box-shadow:0 1px 6px rgba(31,56,100,.05);transition:transform .12s,box-shadow .12s`, onOpen:()=>this.go(it.tab)}))})):[],
       // ----- Renewal forecast -----
@@ -17114,7 +17318,7 @@ class Component extends DCLogic {
       ...(()=>{ const st=(this.state.roster||[]).find(r=>r.id===this.state.whyStaff); const rd=(st&&this.state.whyCode)?this.ruleDiagnostic(st,this.state.whyCode):null; const allowed=['manager','admin'].includes(role)&&!!rd&&rd.effectiveText==='REQUIRED'; const sessions=allowed?this.whyUpcomingSessions(this.state.whyStaff,this.state.whyCode):[]; return {whyCanRegister:allowed,whySessions:sessions,whyHasSessions:sessions.length>0,whyNoSessions:allowed&&sessions.length===0,whySessionCount:sessions.length+' upcoming',whyRegisterHelp:role==='admin'?'Administrators enroll the staff member immediately.':'Manager registrations are submitted to the Training Department for approval.',whyNoSessionsText:role==='admin'?'No upcoming open sessions are scheduled for this requirement. Add one under Scheduled Sessions, then reopen this cell.':'No upcoming open sessions are scheduled for this requirement. Contact the Training Department to request a session.'}; })(),
       onCloseWhy:()=>this.closeWhy(),
       aApprovals: role==='admin'&&tab==='approvals', aSessions: role==='admin'&&tab==='sessions', aCalendarUpload: role==='admin'&&tab==='calendarupload', aReports: role==='admin'&&tab==='reports', onColorReportExportWorkbook:()=>this.exportComplianceColorWorkbook(), aCatalog: role==='admin'&&tab==='catalog', aCourseInfo: role==='admin'&&tab==='courseinfo', aCerts: role==='admin'&&tab==='certificates',
-      aStaffCount:_activeRoster.length.toLocaleString(), aRed, aPending:aPendingAdmin.length, aSessionCount:this.state.sessions.length, aPct,
+      aStaffCount:((_isAdmin&&tab==='dash')?this.activeStaffList().length:_activeRoster.length).toLocaleString(), aRed, aPending:aPendingAdmin.length, aSessionCount, aPct, aStaffPct,
       aApprovalsShort, aHasApprovals:aPendingAdmin.length>0, aNoApprovals:aPendingAdmin.length===0, aUpcoming, goAApprovals:()=>this.go('approvals'),
       aCalMonth:_aCal.monthLabel, aCalDays:_aCal.days, aCalWeekdays:_aCal.weekdays, aCalSummary:_aCal.monthSummary, aCalPrevStyle:_aCal.prevStyle, onACalPrev:_aCal.onPrev, onACalToday:_aCal.onToday, onACalNext:_aCal.onNext,
       aCalOfficialHas:!!_aCal.officialHas, aCalOfficialPages:_aCal.officialPages||[], aCalOfficialLabel:_aCal.officialLabel||'', aCalOfficialDetail:_aCal.officialDetail||'', aCalGeneratedOnly:_aCal.generatedOnly!==false,
@@ -17147,7 +17351,7 @@ onCiUseStd:()=>this.setState({ciDesc:this.courseSheetSummaryDefault(this.state.c
       nsCode:this.state.nsCode, onNsCode:(e)=>this.selectNsCourse(e.target.value), nsCourseOpts:(role==='admin'&&tab==='sessions')?this.sessionCourses().map(c=>({v:c.key,label:c.label})):[], nsStatus:this.state.nsStatus, onNsStatus:(e)=>this.setState({nsStatus:e.target.value}), nsTitle:this.state.nsTitle, onNsTitle:(e)=>this.setState({nsTitle:e.target.value}), nsDate:this.state.nsDate, onNsDate:(e)=>this.setState({nsDate:e.target.value}), nsStart:this.state.nsStart, onNsStart:(e)=>this.onNsStartChange(e.target.value), nsEnd:this.state.nsEnd, onNsEnd:(e)=>this.setState({nsEnd:e.target.value}), nsWhere:this.state.nsWhere, onNsWhere:(e)=>this.setState({nsWhere:e.target.value}), nsLocChoices:(role==='admin'&&tab==='sessions')?this.sessionLocChoices():[], nsLocationChoice:this.state.nsLocationChoice, onNsLocChoice:(e)=>this.onNsLocChoice(e.target.value), nsCustomLocation:this.state.nsCustomLocation, onNsCustomLoc:(e)=>this.onNsCustomLoc(e.target.value), nsShowCustomLoc:this.state.nsLocationChoice==='Other', nsIsZoom:this.isZoomWhere(this.state.nsLocationChoice), nsZoomLink:this.zoomLinkForWhere('Zoom'), nsInstr1:this.state.nsInstr1, onNsInstr1:(e)=>this.setState({nsInstr1:e.target.value}), nsInstr2:this.state.nsInstr2, onNsInstr2:(e)=>this.setState({nsInstr2:e.target.value}), nsCap:this.state.nsCap, onNsCap:(e)=>this.setState({nsCap:e.target.value}), onAddSession:()=>this.addSession(), nsSaveLabel:this.state.editId?'Save changes':(this.state.rescheduleSourceId?'Save rescheduled session':'+ Add session'), nsEditing:!!(this.state.editId||this.state.rescheduleSourceId), onCancelEdit:()=>this.cancelEditSession(), nsFormTitle:this.state.editId?'\u270e Editing session \u2014 update fields below and Save changes':(this.state.rescheduleSourceId?'\u21bb Reschedule cancelled session \u2014 choose the replacement date/time; roster will carry forward':'Add a session'), nsStartOpts, nsEndOpts, nsLocOpts, nsInstrOpts, nsCapOpts,
       showArchived:this.state.showArchived, onToggleArchived:(e)=>this.setState({showArchived:e.target.checked}),
       profIsArchived:admSel?archivedSet.has(admSel.id):false, archiveBtnLabel:(admSel&&archivedSet.has(admSel.id))?'Reactivate staff':'Archive (inactive)', onToggleArchive:()=>admSel&&this.setArchived(admSel.id, !archivedSet.has(admSel.id)),
-      aLoc:this.state.aLoc, aSearch:this._sd('aSearch'), aCountLabel, aPageLabel, aPageSizeVal:String(this.state.aPageSize||50), onAPageSize:(e)=>this.setState({aPageSize:+e.target.value,aPage:0}), onAdminLoc:(e)=>this.setState({aLoc:e.target.value,aPage:0}), onAdminSearch:(e)=>this._searchInput('aSearch',e.target.value,{aPage:0}), aPrev:()=>this.setState(s=>({aPage:Math.max(0,s.aPage-1)})), aNext:()=>this.setState(s=>({aPage:Math.min(aTotalPages-1,s.aPage+1)})),
+      aLoc:this.state.aLoc, aSearch:this._sd('aSearch'), aCountLabel, aCountCaption:this.state.showArchived?'Records in view':'Active staff in scope', aPageLabel, aPageSizeVal:String(this.state.aPageSize||50), onAPageSize:(e)=>this.setState({aPageSize:+e.target.value,aPage:0}), onAdminLoc:(e)=>this.setState({aLoc:e.target.value,aPage:0}), onAdminSearch:(e)=>this._searchInput('aSearch',e.target.value,{aPage:0}), aPrev:()=>this.setState(s=>({aPage:Math.max(0,s.aPage-1)})), aNext:()=>this.setState(s=>({aPage:Math.min(aTotalPages-1,s.aPage+1)})),
       // modals
       ...this.commsVals(),
       showPlayer, player, showCert, cert,
@@ -17198,7 +17402,7 @@ onCiUseStd:()=>this.setState({ciDesc:this.courseSheetSummaryDefault(this.state.c
     if(draft.removeOverride){ if(sim[locId]&&sim[locId].overrides) delete sim[locId].overrides[code]; }
     else { if(!sim[locId]) sim[locId]={overrides:{},note:''}; if(!sim[locId].overrides) sim[locId].overrides={}; sim[locId].overrides[code]=hypo; }
     this._simProfiles=sim; const after=affected.map(s=>this.effStatus(s,code)); this._simProfiles=null;
-    const isComp=(l)=> ['g','y','o','w','info'].includes(l); const isNon=(l)=> l==='r';
+    const isComp=(l)=> this.complianceLetterMet(l)===true; const isNon=(l)=> l==='r';
     let currentlyCompliant=0, willNonComp=0, willCompOrNR=0, changedCount=0;
     affected.forEach((s,i)=>{ const b=before[i], a=after[i]; if(isComp(b)) currentlyCompliant++; if(b!==a) changedCount++; if(!isNon(b)&&isNon(a)) willNonComp++; if(isNon(b)&&!isNon(a)) willCompOrNR++; });
     const D=window.HASC_DATA||{}; const allMgr=[...(D.managers||[]),...(D.areaCoordinators||[])]; const nameOf=(id)=>{ const m=allMgr.find(x=>String(x.empId)===String(id)); return m?m.name:null; };
