@@ -3600,6 +3600,7 @@ window.HASC_COMPLETION_REFERENCE_20260915=[{"id":"2714","name":"Semel, Ben","pos
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px;margin-bottom:14px">
             <sc-for list="{{ calDraftPages }}" as="p" hint-placeholder-count="2"><div style="border:1px solid #D9E0EC;border-radius:12px;overflow:hidden;background:#F8FAFD"><div style="padding:6px 10px;font-size:10.5px;font-weight:900;color:#46557a;background:#F1F4F9">Official page {{ p.page }}</div><img sc-camel-src="{{ p.src }}" alt="{{ p.alt }}" style="width:100%;height:auto;display:block"></div></sc-for>
           </div>
+          <sc-if value="{{ calDraftRevisionHas }}" hint-placeholder-val="{{ false }}"><div style="border:1px solid #F3B7B0;background:#FFF3F1;border-radius:10px;padding:9px 12px;margin-bottom:10px;font-size:11.5px;color:#8A1C12;font-weight:700"><div style="font-weight:900;margin-bottom:4px">Changes to review against sessions already scheduled</div><sc-for list="{{ calDraftRevision }}" as="r" hint-placeholder-count="1"><div>• {{ r.text }}</div></sc-for></div></sc-if>
           <sc-if value="{{ calDraftAssumedHas }}" hint-placeholder-val="{{ false }}"><div style="border:1px solid #F0C36D;background:#FFF8E6;border-radius:10px;padding:9px 12px;margin-bottom:10px;font-size:11.5px;color:#7A5200;font-weight:700">{{ calDraftAssumedNote }}</div></sc-if>
           <div style="display:grid;grid-template-columns:1.45fr .8fr;gap:12px;align-items:start">
             <div style="border:1px solid #E3E8F5;border-radius:12px;overflow:auto;max-height:350px"><sc-raw-table style="width:100%;border-collapse:collapse;font-size:11.5px"><sc-raw-thead><sc-raw-tr><sc-raw-th style="{{ thStyle }}">Date</sc-raw-th><sc-raw-th style="{{ thStyle }}">Training</sc-raw-th><sc-raw-th style="{{ thStyle }}">Time</sc-raw-th><sc-raw-th style="{{ thStyle }}">Location</sc-raw-th></sc-raw-tr></sc-raw-thead><sc-raw-tbody><sc-for list="{{ calDraftSessions }}" as="x" hint-placeholder-count="8"><sc-raw-tr><sc-raw-td style="{{ tdStyle }};white-space:nowrap;font-weight:800">{{ x.date }}</sc-raw-td><sc-raw-td style="{{ tdStyle }};font-weight:800;color:#152A4D">{{ x.title }}</sc-raw-td><sc-raw-td style="{{ tdStyle }};white-space:nowrap">{{ x.time }}</sc-raw-td><sc-raw-td style="{{ tdStyle }};white-space:nowrap">{{ x.where }}</sc-raw-td></sc-raw-tr></sc-for></sc-raw-tbody></sc-raw-table></div>
@@ -7963,7 +7964,9 @@ class Component extends DCLogic {
      compliance windows can't be spoofed by changing the device clock.
   =================================================================== */
   todayDate(){ return new Date(); }
-  sessionDateObj(s){ if(!s) return null; const x=new Date(s.date); if(isNaN(x)) return null; x.setHours(0,0,0,0); return x; }
+  // Calendar-imported sessions store ISO dates; new Date('YYYY-MM-DD') is UTC midnight (the previous day in New York), so read them as local calendar dates.
+  parseSessionDate(v){ const t=String(v==null?'':v).trim(); const m=t.match(/^(\d{4})-(\d{2})-(\d{2})$/); if(m) return new Date(+m[1],+m[2]-1,+m[3]); return new Date(t); }
+  sessionDateObj(s){ if(!s) return null; const x=this.parseSessionDate(s.date); if(isNaN(x)) return null; x.setHours(0,0,0,0); return x; }
   isUpcomingSession(s){ const x=this.sessionDateObj(s); if(!x) return true; const t=this.todayDate(); t.setHours(0,0,0,0); return x>=t; }
   cmpSession(a,b){ const da=this.sessionDateObj(a), db=this.sessionDateObj(b); if(da&&db) return da-db; if(da) return -1; if(db) return 1; return 0; }
   // Canonical two-digit-year expansion — the ONLY place this rule lives.
@@ -8617,10 +8620,17 @@ class Component extends DCLogic {
   selectNsCourse(key){ const sc=this.sessionCourse(key); const ss=this.state.sessions.filter(s=>s.code===sc.code); const first=ss[0]; let start='',end=''; if(first){ const t=((first.when||'').split('\u00b7')[1]||'').trim(); start=(t.split('\u2013')[0]||'').trim(); end=(t.split('\u2013')[1]||'').trim(); } const dur=this.sessionDefaultDur(key); if(dur&&start){ end=this.add12(start,dur)||end; } const _defLoc=this.sessionDefaultLoc(key)||(first&&first.where)||'', _priorInstr=((first&&first.instructor)||'').split(',').map(x=>x.trim()).filter(Boolean), _defInstr=this.sessionDefaultInstructors(key), _instr=_defInstr.length?_defInstr:_priorInstr; this.setState({nsCode:key, nsWhere:_defLoc, ...this.locStateFor(_defLoc), nsInstr1:_instr[0]||'', nsInstr2:_instr[1]||'', nsCap:first?String(first.capacity):'10', nsStart:start, nsEnd:end}); }
   onNsStartChange(v){ const dur=this.sessionDefaultDur(this.state.nsCode); const end=(dur&&v)?this.add12(v,dur):this.state.nsEnd; this.setState({nsStart:v, nsEnd:end||this.state.nsEnd}); }
   addSession(){ if(this.state.role!=='admin'){this.toast('Administrator access is required.');return;}const sc=this.sessionCourse(this.state.nsCode),code=sc.code,title=(this.state.nsTitle||'').trim()||sc.label,iso=(this.state.nsDate||'').trim();if(!iso){this.toast('Pick a session date.');return;}const cap=Number(String(this.state.nsCap||'').trim());if(!Number.isInteger(cap)||cap<1){this.toast('Capacity must be a whole number of at least 1.');return;}if(this.state.nsStart&&this.state.nsEnd){const sm=this.time12Minutes(this.state.nsStart),em=this.time12Minutes(this.state.nsEnd);if(sm===null||em===null){this.toast('Enter a valid start and end time.');return;}if(em<=sm){this.toast('End time must be later than the start time.');return;}}const d=new Date(iso+'T00:00:00'),date=isNaN(d)?iso:d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'}),tm=(this.state.nsStart&&this.state.nsEnd)?(this.state.nsStart+'–'+this.state.nsEnd):(this.state.nsStart||''),_loc=this.resolveSessionWhere(this.state.nsLocationChoice,this.state.nsCustomLocation);if(!_loc.ok){this.toast(_loc.error);return;}const where=_loc.where||(this.state.nsWhere||'').trim()||'TBD',fields={code,title,date,when:date+(tm?(' · '+tm):''),where,instructor:this._splitInstructors([this.state.nsInstr1,this.state.nsInstr2].map(x=>(x||'').trim()).filter(Boolean).concat(this.state.editId?this._splitInstructors((this.state.sessions.find(x=>x.id===this.state.editId)||{}).instructor).slice(2):[]).join(',')).join(', '),capacity:cap,status:this.state.nsStatus||'Scheduled'},eid=this.state.editId,rid=this.state.rescheduleSourceId;
-    if(eid){const before=this.state.sessions.find(x=>x.id===eid);const enrolledNow=before?this.seatedRoster(before).length:0;if(before&&cap<enrolledNow){this.toast('Capacity cannot be lower than the '+enrolledNow+' staff already enrolled. Remove staff first, then lower capacity.');return;}this.setState(s=>({sessions:s.sessions.map(x=>x.id===eid?{...x,...fields}:x),editId:null,rescheduleSourceId:null,nsDate:'',nsTitle:''}),()=>{const after=this.state.sessions.find(x=>x.id===eid)||{...before,...fields},changes=[];if(before&&before.date!==after.date)changes.push('Date: '+before.date+' → '+after.date);if(before&&before.when!==after.when)changes.push('Time: '+this.remTimeRange(before)+' → '+this.remTimeRange(after));if(before&&before.where!==after.where)changes.push('Location: '+(before.where||'TBD')+' → '+(after.where||'TBD'));if(this.state.reminderSettings.regenOnChange!==false)this.generateReminders(eid,{silent:true,note:'Session changed — reminders regenerated'});if(changes.length&&this.state.reminderSettings.changeNotices!==false){const typ=(before.date!==after.date||before.when!==after.when)?'session_rescheduled':'session_changed',disc='change:'+eid+':'+Date.now(),extra={changeSummary:changes.join('; '),discriminator:disc,dispatchNow:true,vars:{change_summary:changes.join('; ')}};this.notifySessionRoster(typ,eid,extra);this.notifySessionManagers(typ,eid,{...extra,discriminator:disc+':manager'});}this._scheduleOperationalPersist();});this._mirrorToService('session.edit',S=>S.log({actor:'Admin',role:'admin',action:'Session edited',entity:'sessions',entity_id:eid,after:title,portal:'Admin',severity:'Info'}));this.logAudit('Session edited',{target:title+' · '+date,next:fields.when+' · '+fields.where,sev:'Info',relatedId:eid});this.toast('Session updated — affected notifications/reminders were recalculated.');}
+    if(eid){const before=this.state.sessions.find(x=>x.id===eid);const enrolledNow=before?this.seatedRoster(before).length:0;if(before&&cap<enrolledNow){this.toast('Capacity cannot be lower than the '+enrolledNow+' staff already enrolled. Remove staff first, then lower capacity.');return;}
+      // Compare calendar days and parsed times, not strings: an imported "2026-12-01" and "Tue, Dec 1, 2026" are the same day.
+      const _t=d=>d?d.getTime():null,dateChanged=!!before&&_t(this.sessionDateObj(before))!==_t(this.sessionDateObj(fields)),timeChanged=!!before&&(_t(this.parseSessionStart(before))!==_t(this.parseSessionStart({...before,...fields}))||_t(this.parseSessionEnd(before))!==_t(this.parseSessionEnd({...before,...fields})));
+      if(before&&!dateChanged)fields.date=before.date;
+      // Completions and voids are keyed by the certified session date; moving it here would leave the transcript on the old date.
+      if(before&&this._sessionLocked(before)&&(dateChanged||timeChanged||String(before.code||'')!==String(fields.code||''))){this.toast('This session is certified and locked — its date, time and course cannot be changed. Use Attendance correction for individual records.');return;}
+      const _prevCap=before?Number(before.capacity)||0:0;
+      this.setState(s=>({sessions:s.sessions.map(x=>x.id===eid?{...x,...fields}:x),requests:(s.requests||[]).map(r=>String(r.sessionId)===String(eid)&&!['completed','failed','no_show'].includes(r.status)?{...r,sessionDate:fields.date,sessionTime:fields.when,sessionLocation:fields.where,courseId:fields.code,courseName:fields.title}:r),editId:null,rescheduleSourceId:null,nsDate:'',nsTitle:''}),()=>{const after=this.state.sessions.find(x=>x.id===eid)||{...before,...fields},changes=[];if(cap>_prevCap)this._promoteWaitlist(eid,'Capacity raised to '+cap);if(before&&dateChanged)changes.push('Date: '+before.date+' → '+after.date);if(before&&timeChanged)changes.push('Time: '+this.remTimeRange(before)+' → '+this.remTimeRange(after));if(before&&before.where!==after.where)changes.push('Location: '+(before.where||'TBD')+' → '+(after.where||'TBD'));if(this.state.reminderSettings.regenOnChange!==false)this.generateReminders(eid,{silent:true,note:'Session changed — reminders regenerated'});if(changes.length&&this.state.reminderSettings.changeNotices!==false){const typ=(dateChanged||timeChanged)?'session_rescheduled':'session_changed',disc='change:'+eid+':'+Date.now(),extra={changeSummary:changes.join('; '),discriminator:disc,dispatchNow:true,vars:{change_summary:changes.join('; ')}};this.notifySessionRoster(typ,eid,extra);this.notifySessionManagers(typ,eid,{...extra,discriminator:disc+':manager'});}this._scheduleOperationalPersist();});this._mirrorToService('session.edit',S=>S.log({actor:'Admin',role:'admin',action:'Session edited',entity:'sessions',entity_id:eid,after:title,portal:'Admin',severity:'Info'}));this.logAudit('Session edited',{target:title+' · '+date,next:fields.when+' · '+fields.where,sev:'Info',relatedId:eid});this.toast('Session updated — affected notifications/reminders were recalculated.');}
     else if(rid){const source=(this.state.cancelledSessions||[]).find(x=>String(x.id)===String(rid));if(!source){this.setState({rescheduleSourceId:null});this.toast('The cancelled source session could not be found.');return;}const nid='ns'+Date.now(),raw=(source.rosterSnapshot||source.roster||[]).map(x=>({...x,staffId:String(x.staffId),waitlist:x.waitlist===true})),ordered=[...raw.filter(x=>!x.waitlist),...raw.filter(x=>x.waitlist)],carry=ordered.map((x,i)=>({...x,waitlist:i>=fields.capacity})),seatById=new Map(carry.map(x=>[String(x.staffId),x.waitlist===true]));const newSess={id:nid,...fields,roster:carry,certified:false,locked:false,att:{},pass:{},rescheduledFrom:rid,rescheduledAt:new Date().toISOString()};const nowIso=new Date().toISOString(),existingStaffReq=new Set();let requests=(this.state.requests||[]).map(r=>{if(String(r.sessionId)!==String(rid)||r.status!=='needsReschedule')return r;const sid=String(r.staffId);existingStaffReq.add(sid);const inCarriedRoster=seatById.has(sid),wl=inCarriedRoster&&seatById.get(sid)===true,prior=r.preCancelStatus||r.previousStatus||'';const nextStatus=inCarriedRoster?(wl?'waitlisted':'enrolled'):(['pendingMgr','pendingAdmin'].includes(prior)?prior:'needsReschedule');return {...r,previousSessionId:rid,sessionId:nid,sessionDate:newSess.date,sessionTime:newSess.when,sessionLocation:newSess.where,courseId:newSess.code,courseName:newSess.title,status:nextStatus,rescheduledAt:nowIso,updatedAt:nowIso};});const byId=this._rosterByIdMemo();carry.forEach(x=>{const sid=String(x.staffId);if(existingStaffReq.has(sid))return;const st=byId[sid];if(!st)return;const r=this.buildRequestMeta(st,newSess,{asAdmin:true});requests.push({...r,status:x.waitlist?'waitlisted':'enrolled',previousSessionId:rid,rescheduledAt:nowIso});});const cancelled=(this.state.cancelledSessions||[]).map(x=>String(x.id)===String(rid)?{...x,rescheduledTo:nid,rescheduledAt:nowIso,rescheduledWhen:newSess.when}:x);this.setState(s=>({sessions:[...s.sessions,newSess],requests,cancelledSessions:cancelled,rescheduleSourceId:null,editId:null,nsDate:'',nsTitle:'',schedSessionId:nid}),()=>{this.generateReminders(nid,{silent:true,note:'Cancelled session rescheduled — roster carried forward'});const summary='Rescheduled from '+(source.when||source.date||'cancelled session')+' to '+newSess.when+' · '+newSess.where,disc='reschedule:'+rid+':'+nid+':'+Date.now(),extra={changeSummary:summary,discriminator:disc,dispatchNow:true,vars:{change_summary:summary}};this.notifySessionRoster('session_rescheduled',nid,extra);this.notifySessionManagers('session_rescheduled',nid,{...extra,discriminator:disc+':manager'});this._scheduleOperationalPersist();});this._mirrorToService('session.create',S=>S.log({actor:'Admin',role:'admin',action:'Cancelled session rescheduled',entity:'sessions',entity_id:nid,before:rid,after:title,portal:'Admin',severity:'Compliance'}));this.logAudit('Cancelled session rescheduled',{target:title,prev:(source.when||source.date||rid),next:newSess.when+' · '+newSess.where,notes:carry.filter(x=>!x.waitlist).length+' enrolled · '+carry.filter(x=>x.waitlist).length+' waitlisted carried forward',sev:'Compliance',relatedId:nid});this.toast('Session rescheduled — roster carried forward, requests reconnected, and notifications regenerated.');}
     else{const nid='ns'+Date.now();this.setState(s=>({sessions:[...s.sessions,{id:nid,...fields,roster:[],certified:false,att:{},pass:{}}],nsDate:'',nsTitle:''}));this._mirrorToService('session.create',S=>S.log({actor:'Admin',role:'admin',action:'Session created',entity:'sessions',entity_id:nid,after:title,portal:'Admin',severity:'Info'}));this.logAudit('Session created',{target:title+' · '+date,next:fields.where+(fields.instructor?(' · '+fields.instructor):''),notes:'Manual add',sev:'Info',relatedId:nid});this.toast('Session added: '+title+' · '+date+'.');} }
-  startEditSession(id){ if(this.state.role!=='admin'){this.toast('Administrator access is required.');return;} const s=this.state.sessions.find(x=>x.id===id); if(!s)return; const t=((s.when||'').split('·')[1]||'').trim(); const ins=(s.instructor||'').split(',').map(x=>x.trim()); let iso=''; const d=new Date(s.date); if(!isNaN(d)){ iso=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); } this.setState({editId:id,rescheduleSourceId:null, nsCode:this.sessionCourseKeyFor(s), nsTitle:s.title||'', nsStatus:s.status||'Scheduled', nsDate:iso, nsStart:(t.split('–')[0]||'').trim(), nsEnd:(t.split('–')[1]||'').trim(), nsWhere:s.where, ...this.locStateFor(s.where), nsInstr1:ins[0]||'', nsInstr2:ins[1]||'', nsCap:String(Number(s.capacity)||10)}); try{window.scrollTo(0,0);}catch(e){} this.toast('Editing session — update fields and Save.'); }
+  startEditSession(id){ if(this.state.role!=='admin'){this.toast('Administrator access is required.');return;} const s=this.state.sessions.find(x=>x.id===id); if(!s)return; const t=((s.when||'').split('·')[1]||'').trim(); const ins=(s.instructor||'').split(',').map(x=>x.trim()); let iso=''; const d=this.parseSessionDate(s.date); if(!isNaN(d)){ iso=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); } this.setState({editId:id,rescheduleSourceId:null, nsCode:this.sessionCourseKeyFor(s), nsTitle:s.title||'', nsStatus:s.status||'Scheduled', nsDate:iso, nsStart:(t.split('–')[0]||'').trim(), nsEnd:(t.split('–')[1]||'').trim(), nsWhere:s.where, ...this.locStateFor(s.where), nsInstr1:ins[0]||'', nsInstr2:ins[1]||'', nsCap:String(Number(s.capacity)||10)}); try{window.scrollTo(0,0);}catch(e){} this.toast('Editing session — update fields and Save.'); }
   startRescheduleSession(id){ if(this.state.role!=='admin'){this.toast('Administrator access is required.');return;}const s=(this.state.cancelledSessions||[]).find(x=>String(x.id)===String(id));if(!s){this.toast('Cancelled session not found.');return;}if(s.rescheduledTo){this.toast('This cancelled session has already been rescheduled.');return;}const tm=((s.when||'').split('·')[1]||'').trim(),ins=(s.instructor||'').split(',').map(x=>x.trim());this.setState({editId:null,rescheduleSourceId:id,nsCode:this.sessionCourseKeyFor(s),nsTitle:s.title||'',nsStatus:'Scheduled',nsDate:'',nsStart:(tm.split('–')[0]||'').trim(),nsEnd:(tm.split('–')[1]||'').trim(),nsWhere:s.where||'',...this.locStateFor(s.where||''),nsInstr1:ins[0]||'',nsInstr2:ins[1]||'',nsCap:String(s.capacity||10),schedSessionId:id});try{window.scrollTo(0,0);}catch(e){}this.toast('Rescheduling cancelled session — choose the new date/time and Save rescheduled session.'); }
   cancelEditSession(){ this.setState({editId:null,rescheduleSourceId:null,nsDate:''}); }
   // ===== Session location: controlled training-delivery options + custom "Other" =====
@@ -9185,7 +9195,7 @@ class Component extends DCLogic {
   // Parse a session's start time into a Date for admin-side preview; production scheduling is server-side.
   parseSessionStart(s){ if(!s) return null;
     const dateStr=((s.date||(s.when||'').split('\u00b7')[0])||'').replace(/^[A-Za-z]+,\s*/,'').trim();
-    const base=new Date(dateStr); if(isNaN(base)) return null;
+    const base=this.parseSessionDate(dateStr); if(isNaN(base)) return null;
     const timePart=((s.when||'').split('\u00b7')[1]||'').trim();
     const seg=timePart.split(/[\u2013\u2014-]/); const startRaw=(seg[0]||'').trim(); const endRaw=(seg[1]||'').trim();
     const endAP=(endRaw.match(/(AM|PM)/i)||[])[1]; let ap=(startRaw.match(/(AM|PM)/i)||[])[1]||endAP||'AM';
@@ -9318,6 +9328,21 @@ class Component extends DCLogic {
       'Course: '+rec.courseName,'Original date: '+(rec.sessionDate||''),'Original time: '+(rec.range||''),locLine,
       rec.reason?('Reason: '+rec.reason):'','','This session has been cancelled. Please contact your manager for next steps.','','— '+f].filter(x=>x!==''&&x!==null).join('\n');
     return {to:rec.recipientEmail, subject:subj, body}; }
+  // Seats opened by a capacity increase go to waitlisted staff in roster order, same notices as a roster removal.
+  _promoteWaitlist(sessionId,note){
+    const sess=(this.state.sessions||[]).find(x=>x.id===sessionId); if(!sess||this._sessionLocked(sess)||!this.isUpcomingSession(sess))return [];
+    const cap=Number(sess.capacity)||0; let open=cap?cap-this.seatedRoster(sess).length:0; if(open<=0)return [];
+    const ids=[]; const roster=(sess.roster||[]).map(r=>{if(open>0&&r.waitlist===true){open--;ids.push(String(r.staffId));return {...r,waitlist:false};}return r;}); if(!ids.length)return [];
+    const now=new Date().toISOString(),set=new Set(ids),promotedReqs=[];
+    const requests=(this.state.requests||[]).map(r=>{if(r.sessionId===sessionId&&set.has(String(r.staffId))&&r.status==='waitlisted'){const nr={...r,status:'enrolled',updatedAt:now};promotedReqs.push(nr);return nr;}return r;});
+    this.setState(p=>({sessions:p.sessions.map(se=>se.id===sessionId?{...se,roster}:se),requests}),()=>{
+      const live=(this.state.sessions||[]).find(x=>x.id===sessionId)||{...sess,roster};
+      this.generateReminders(sessionId,{silent:true,note:'Waitlist promoted — '+(note||'seats opened')});
+      ids.forEach(id=>{const req=promotedReqs.find(r=>String(r.staffId)===id),pst=this.staffById(id);if(req)this._mirrorToService('reg.approve',S=>S.approveRegistrationRequest(req.id,(this.state.currentUser&&this.state.currentUser.name)||'Admin'));this.notifyStaffEvent('registration_confirmed',id,live,{registrationStatus:'Enrolled',registrationId:req&&req.id,discriminator:'waitlist-promoted:'+((req&&req.id)||id)+':'+Date.now(),dispatchNow:true});this.logAudit('Waitlist promoted after roster opening',{staff:pst?pst.name:id,target:sess.title||sessionId,prev:'waitlisted',next:'enrolled',notes:note||'Seats opened',sev:'Compliance',relatedId:sessionId});});
+      this._scheduleOperationalPersist();
+    });
+    return ids;
+  }
   // Roster removal (admin) — drops a staff member from a session roster and cancels their reminders.
   removeFromRoster(sessionId,staffId){
     const sess=this.state.sessions.find(x=>x.id===sessionId),st=this.staffById(staffId); if(!sess)return;
@@ -9403,9 +9428,12 @@ class Component extends DCLogic {
   setRemSetting(k,v){ this.setState(s=>({reminderSettings:{...s.reminderSettings,[k]:v}}),()=>{this._syncNotifyEngine();this.regenAllReminders(true);this._scheduleNotificationConfigSync();}); this.logAudit('Notification settings changed',{target:k,next:String(v),notes:'Notification rules synchronized to the production adapter',sev:'Info'}); }
   setCommTab(t){ this.setState({commTab:t, remPreview:null}); }
   // ---- cancellation workflow ----
-  requestCancelSession(id){ this.setState({cancelModal:{sessionId:id}, cancelReason:''}); }
+  // Cancelling tells every registrant their upcoming class is off, so it is admin-only and limited
+  // to classes that have not happened; finished classes are fixed through attendance correction.
+  _cancelSessionBlock(s){ if(this.state.role!=='admin')return 'Only administrators can cancel sessions.'; if(!s)return ''; if(this._sessionLocked(s))return 'This session is certified and locked. Use Attendance correction instead of cancelling it.'; if(Object.keys(s.att||{}).length||Object.keys(s.pass||{}).length)return 'Attendance has already been recorded for this session, so it cannot be cancelled. Use Attendance correction instead.'; if(!this.isUpcomingSession(s))return 'This session date has passed, so it cannot be cancelled. Record its attendance instead.'; return ''; }
+  requestCancelSession(id){ const why=this._cancelSessionBlock((this.state.sessions||[]).find(x=>x.id===id)); if(why){this.toast(why);return;} this.setState({cancelModal:{sessionId:id}, cancelReason:''}); }
   closeCancelModal(){ this.setState({cancelModal:null, cancelReason:''}); }
-  confirmCancelSession(){ const m=this.state.cancelModal;if(!m)return;const id=m.sessionId,s=this.state.sessions.find(x=>x.id===id);if(!s){this.closeCancelModal();return;}const reason=(this.state.cancelReason||'').trim(),set=this.state.reminderSettings,byId={};(this.state.roster||[]).forEach(r=>byId[r.id]=r);const reg=(s.roster||[]),cancelledCount=this.cancelRemindersForSession(id),stamp=Date.now(),results=[];
+  confirmCancelSession(){ const m=this.state.cancelModal;if(!m)return;const id=m.sessionId,s=this.state.sessions.find(x=>x.id===id);if(!s){this.closeCancelModal();return;}const _blocked=this._cancelSessionBlock(s);if(_blocked){this.closeCancelModal();this.toast(_blocked);return;}const reason=(this.state.cancelReason||'').trim(),set=this.state.reminderSettings,byId={};(this.state.roster||[]).forEach(r=>byId[r.id]=r);const reg=(s.roster||[]),cancelledCount=this.cancelRemindersForSession(id),stamp=Date.now(),results=[];
     const base={reason,discriminator:'session-cancelled:'+id+':'+stamp,dispatchNow:true,vars:{cancellation_reason:reason||'(no reason provided)'}};
     if(set.cancelStaff!==false)reg.forEach(r=>results.push(this.notifyStaffEvent('session_cancelled',r.staffId,s,Object.assign({},base,{discriminator:base.discriminator+':staff:'+r.staffId}))));
     if(set.cancelManager!==false){const groups={};reg.forEach(r=>{const st=byId[r.staffId],mgr=st&&this.resolveManager(st);if(!mgr||!mgr.ok)return;(groups[mgr.empId]=groups[mgr.empId]||{mgr,staff:[]}).staff.push(st);});Object.keys(groups).forEach(k=>{const g=groups[k],rec=this._notifyManagerRecipient(g.mgr),names=g.staff.map(x=>this.staffNameDisplay(x));results.push(this.notifySyntheticEvent('session_cancelled',rec,s,Object.assign({},base,{managerName:g.mgr.name,discriminator:base.discriminator+':manager:'+k,vars:{manager_name:g.mgr.name,registered_staff_list:names.map(n=>'• '+n).join('\n'),cancellation_reason:reason||'(no reason provided)'}})));});}
@@ -14422,6 +14450,12 @@ class Component extends DCLogic {
     const capacity=Number(sess.capacity)||0, used=approved+pending;
     return {approved,pending,used,capacity,remaining:capacity?Math.max(0,capacity-used):999999,over:capacity?used>capacity:false};
   }
+  // Another live session of the same course, overlapping in time, that this staff member already holds a seat or open request in.
+  _overlappingCourseSession(staffId,sess){
+    const ck=this.sessionCourseKeyFor(sess),d0=this.sessionDateObj(sess),s0=this.parseSessionStart(sess),e0=this.parseSessionEnd(sess)||s0,sid=String(staffId),open=new Set(['pendingAdmin','pendingMgr','enrolled','waitlisted']);
+    const overlaps=o=>{const d1=this.sessionDateObj(o);if(!d0||!d1)return false;const s1=this.parseSessionStart(o),e1=this.parseSessionEnd(o)||s1;if(!s0||!s1||+s0===+e0||+s1===+e1)return +d0===+d1;return s0<e1&&s1<e0;};
+    return (this.state.sessions||[]).find(o=>o.id!==sess.id&&!o.cancelled&&String(o.status||'').toLowerCase()!=='cancelled'&&!this._sessionLocked(o)&&this.sessionCourseKeyFor(o)===ck&&overlaps(o)&&((o.roster||[]).some(x=>String(x.staffId)===sid)||(this.state.requests||[]).some(r=>r.sessionId===o.id&&String(r.staffId)===sid&&open.has(r.status))))||null;
+  }
   // Live registration validation (spec #6). Returns {ok,message,warnings}.
   validateRegistrationLive(staffId,sessionId,opts){
     opts=opts||{}; const asAdmin=!!opts.asAdmin,warnings=[];
@@ -14435,6 +14469,8 @@ class Component extends DCLogic {
     if((sess.roster||[]).some(x=>String(x.staffId)===String(staffId))) return {ok:false,message:st.name+' is already registered or waitlisted for this session.'};
     const openStatuses=new Set(['pendingAdmin','pendingMgr','enrolled','waitlisted']);
     if((this.state.requests||[]).some(r=>r.sessionId===sessionId&&String(r.staffId)===String(staffId)&&openStatuses.has(r.status))) return {ok:false,message:st.name+' already has an active registration/request for this session.'};
+    const clash=this._overlappingCourseSession(staffId,sess);
+    if(clash) return {ok:false,message:st.name+' is already registered for '+(clash.title||clash.code)+' at an overlapping time ('+(clash.when||clash.date||'')+').'};
     const cap=this.sessionCapacityLive(sessionId);
     if(cap.capacity&&cap.remaining<=0){ if(!asAdmin||!opts.overrideReason) return {ok:false,code:'capacity',message:'Session is at capacity ('+cap.used+'/'+cap.capacity+'). Admin override with a reason is required.'}; warnings.push('Admin over-capacity override: '+opts.overrideReason); }
     return {ok:true,warnings,staff:st,session:sess,capacity:cap};
@@ -14580,15 +14616,19 @@ class Component extends DCLogic {
     if(this.state.role!=='admin'){this.toast('Corrections are Admin-only.');return false;} if(!String(reason||'').trim()){this.toast('A correction reason is required.');return false;}
     const sess=this.state.sessions.find(s=>s.id===sid); if(!sess){this.toast('Session not found.');return false;} if(!this._sessionLocked(sess)){this.toast('Corrections apply to certified/locked sessions only.');return false;}
     const code=this.normalizeTrainingCode(sess.code,sess.title),dshort=this.formatMDY(this.sessionDateObj(sess)||new Date()),st=this.staffById(staffId);
-    const present=correction.present!=null?correction.present:(sess.att&&sess.att[staffId]),pass=correction.pass!=null?correction.pass:(sess.pass&&sess.pass[staffId]);
+    let present=correction.present!=null?correction.present:(sess.att&&sess.att[staffId]);const pass=correction.pass!=null?correction.pass:(sess.pass&&sess.pass[staffId]);
+    // Recording Pass/Fail for someone marked absent means they attended. Marking an absentee present
+    // without a result would otherwise record a failure, so a result is required first.
+    if(correction.present==null&&correction.pass!=null&&present==='absent')present='present';
+    if(present!=='absent'&&typeof pass!=='boolean'){this.toast('Record Pass or Fail for this attendee — choosing a result also marks them present.');return false;}
     const before={present:sess.att&&sess.att[staffId],pass:sess.pass&&sess.pass[staffId]},nowPass=present!=='absent'&&pass===true,key=this.completionKey(staffId,code,dshort);
     let completions=(this.state.docs.completions||[]).slice(),voids=(this.state.docs.completionVoids||[]).slice(); const existing=completions.find(c=>c.sessionId===sid&&String(c.staffId)===String(staffId));
-    if(nowPass){voids=voids.filter(v=>v.key!==key);if(!existing)completions.push({id:'cc'+Date.now(),staffId:String(staffId),course:code,complianceCode:code,displayCourseTitle:sess.title||this.COURSE_NAME[code]||code,sessionTitle:sess.title,sessionId:sid,date:dshort,source:'In-person session (corrected)',certGenerated:this.issuesCertificate(code),by:'admin',correctionReason:reason});else completions=completions.map(c=>c===existing?{...c,voided:false,voidedReason:null}:c);}
+    if(nowPass){voids=voids.filter(v=>v.key!==key);if(!existing)completions.push({id:'cc'+Date.now(),staffId:String(staffId),course:code,complianceCode:code,displayCourseTitle:sess.title||this.COURSE_NAME[code]||code,sessionTitle:sess.title,sessionId:sid,date:dshort,completedAt:(this.sessionDateObj(sess)||new Date()).toISOString(),source:'In-person session (corrected)',certGenerated:this.issuesCertificate(code),by:'admin',correctionReason:reason});else completions=completions.map(c=>c===existing?{...c,voided:false,voidedReason:null}:c);}
     else if(!voids.some(v=>v.key===key)){const stamp=this.staffChangeStamp();voids.unshift({voidId:'vdc'+stamp.t,key,staffId:String(staffId),staffName:st?st.name:String(staffId),code,course:this.courseLabel(code),completionDate:dshort,reason:String(reason).trim(),voidedBy:(this.state.currentUser&&this.state.currentUser.name)||'Admin',voidDate:stamp.ts,t:stamp.t,sessionId:sid,certVoided:this.issuesCertificate(code)});}
     const docs={...this.state.docs,completions,completionVoids:voids};
     let roster=this.applyCompletionsToRoster(this.applyVoidsToRoster(this.state.roster,docs),docs);
     const outcome=nowPass?'completed':(present==='absent'?'no_show':'failed');
-    const sessions=this.state.sessions.map(se=>se.id===sid?{...se,att:{...(se.att||{}),[staffId]:present},pass:{...(se.pass||{}),[staffId]:pass}}:se);
+    const sessions=this.state.sessions.map(se=>se.id===sid?{...se,att:{...(se.att||{}),[staffId]:present},pass:{...(se.pass||{}),[staffId]:pass},roster:(se.roster||[]).map(x=>String(x.staffId)===String(staffId)?{...x,result:outcome}:x)}:se);
     const requests=this.state.requests.map(r=>r.sessionId===sid&&String(r.staffId)===String(staffId)?{...r,status:outcome,updatedAt:new Date().toISOString()}:r);
     this.saveDocs(docs); this.setState({sessions,requests,roster});
     this._mirrorToService('attendance.correct',S=>S.correctAttendance(sid,String(staffId),{present:present!=='absent',result:present==='absent'?'no_show':(pass?'pass':'fail')},String(reason).trim(),(this.state.currentUser&&this.state.currentUser.name)||'Admin'));
@@ -14716,7 +14756,7 @@ class Component extends DCLogic {
     if(/^online$/i.test(x))return 'Online';
     return x;
   }
-  _calendarExtractWhere(full,key){
+  _calendarExtractWhere(full,key,noDefault){
     const s=String(full||'').replace(/\s+/g,' ').trim();
     if(/\b(?:via\s+)?zoom\b/i.test(s))return 'Zoom';
     if(/\b120\s+(?:Avenue|Ave\.?)\s*M\b/i.test(s))return '120 Avenue M';
@@ -14728,6 +14768,7 @@ class Component extends DCLogic {
     for(const c of choices){ const nc=norm(c); if(nc&&ns.includes(nc))return this._calendarNormalizeWhere(c); }
     const explicit=s.match(/\b(?:at|@|via)\s+([^|]+?)(?=\s+\d{1,2}(?::\d{2})?\s*(?:AM|PM)?\s*[-–—]|$)/i);
     if(explicit){ const w=this._calendarNormalizeWhere(explicit[1]); if(w)return w; }
+    if(noDefault)return '';
     return this._calendarNormalizeWhere(this.sessionDefaultLoc(key))||'TBD';
   }
   _calendarPdfLoader(){
@@ -14946,18 +14987,32 @@ class Component extends DCLogic {
     for(let i=0;i<lines.length;i++){
       let def=null,titleEnd=i;for(let j=i;j<Math.min(lines.length,i+8);j++){const candidate=lines.slice(i,j+1).map(x=>x.text).join(' ').replace(/\s+/g,' ').trim();const d=this._calendarCourseDef(candidate);if(d.matched){def=d;titleEnd=j;break;}if(timeRx.test(candidate))break;}
       if(!def||!def.matched)continue;
-      let first=i,parts=lines.slice(i,titleEnd+1).map(x=>x.text),end=titleEnd,tm=timeRx.exec(parts.join(' '));
+      // "AMAP Day 1 - 2" / "SCIP Day 1-2": the day range belongs to the title and must never be
+      // read as a 1:00–2:00 class time. One cell cannot schedule two days, so it is reported.
+      let multiDay=false;for(let k=titleEnd;k<Math.min(lines.length,titleEnd+3);k++){if(/\bDays?\s*1\s*(?:[-–—&+]|and|to)\s*2\b/i.test(lines.slice(i,k+1).map(x=>x.text).join(' '))){multiDay=true;titleEnd=k;break;}}
+      // The class time is searched only after the title, so digits inside a title are never a time.
+      let first=i,parts=lines.slice(i,titleEnd+1).map(x=>x.text),post=[],pre=[],end=titleEnd,tm=null;
       // Read forward only until a class time appears, and never past the NEXT course title.
       // The old loop kept reading up to 18 lines, so an entry printed without a time swallowed
       // its neighbour and stole that session's time — one session parsed for two titles.
-      while(!tm&&end+1<lines.length&&end-i<18&&!isTitleLine(lines[end+1])){end++;parts.push(lines[end].text);tm=timeRx.exec(parts.join(' '));}
+      while(!tm&&end+1<lines.length&&end-i<18&&!isTitleLine(lines[end+1])){end++;post.push(lines[end].text);tm=timeRx.exec(post.join(' '));}
+      // "7 - 9 PM": the range already matches before the trailing meridiem token is read.
+      if(tm&&end+1<lines.length&&/^[AP]\.?M\.?$/i.test(String(lines[end+1].text||'').trim())){end++;post.push(lines[end].text.replace(/\./g,''));}
       // Some calendars print the time on the line ABOVE the title.
-      if(!tm&&i>0&&!used.has(i-1)&&!isTitleLine(lines[i-1])&&timeRx.test(String(lines[i-1].text||''))){first=i-1;parts.unshift(lines[i-1].text);tm=timeRx.exec(parts.join(' '));}
-      const full=parts.join(' ').replace(/\s+/g,' ').trim(),tim=timeRx.exec(full);
+      if(!tm&&i>0&&!used.has(i-1)&&!isTitleLine(lines[i-1])&&timeRx.test(String(lines[i-1].text||''))){first=i-1;pre=[lines[i-1].text];}
+      // A location printed after the time ("9 - 12 / At East 14th St") belongs to this entry.
+      const tail=[];
+      if(tm&&end+1<lines.length&&/^(?:at|@|via|zoom)$/i.test(String(lines[end+1].text||'').trim())){
+        const ly=Number(lines[end+1].y)||0,tol=Math.max(3,(Number(lines[end+1].h)||8)*.6),startsTitle=k=>{for(let j=k;j<Math.min(lines.length,k+5);j++){if(this._calendarCourseDef(lines.slice(k,j+1).map(x=>x.text).join(' ')).matched)return true;}return false;};
+        while(end+1<lines.length&&tail.length<8&&Math.abs((Number(lines[end+1].y)||0)-ly)<=tol&&!(tail.length&&startsTitle(end+1))&&!(/^\d{1,2}(?::\d{2})?(?:[AP]M)?$/i.test(String(lines[end+1].text||'').trim())&&timeRx.test(lines.slice(end+1,end+5).map(x=>x.text).join(' ')))){end++;tail.push(lines[end].text);}
+      }
+      parts=[...pre,...parts,...post,...tail];
+      const full=parts.join(' ').replace(/\s+/g,' ').trim(),tim=timeRx.exec(post.join(' ').replace(/\s+/g,' '))||timeRx.exec(pre.join(' '));
       if(!tim){skipped.push({day,page:pageNo,text:full.slice(0,90),reason:'no class time was found next to this title'});for(let j=first;j<=end;j++)used.add(j);i=end;continue;}
+      if(multiDay){skipped.push({day,page:pageNo,text:full.slice(0,90),reason:'multi-day entry — list Day 1 and Day 2 on their own dates so each day is scheduled separately'});for(let j=first;j<=end;j++)used.add(j);i=end;continue;}
       const pt=this._calendarParseTime(tim[1],def.key);
       if(!pt.start||!pt.end){skipped.push({day,page:pageNo,text:full.slice(0,90),reason:'the class time “'+tim[1]+'” could not be read'});for(let j=first;j<=end;j++)used.add(j);i=end;continue;}
-      const where=this._calendarExtractWhere(full,def.key),iso=year+'-'+String(month).padStart(2,'0')+'-'+String(day).padStart(2,'0'),dateObj=new Date(year,month-1,day),dateLabel=dateObj.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'});
+      const where=(tail.length&&this._calendarExtractWhere(tail.join(' '),def.key,true))||this._calendarExtractWhere(full,def.key),iso=year+'-'+String(month).padStart(2,'0')+'-'+String(day).padStart(2,'0'),dateObj=new Date(year,month-1,day),dateLabel=dateObj.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'});
       const span=lines.slice(first,end+1),minX=Math.min(...span.map(x=>x.x)),minY=Math.min(...span.map(x=>x.y)),maxR=Math.max(...span.map(x=>x.x+x.w)),maxB=Math.max(...span.map(x=>x.y+x.h)),locKey=String(where||'').toLowerCase().replace(/\s+/g,''),sk=iso+'|'+def.key+'|'+pt.range.replace(/\s/g,'')+'|'+locKey;
       sessions.push({day,iso,page:pageNo,title:def.title,key:def.key,code:def.code,where,time:pt.range,start:pt.start,end:pt.end,timeAssumed:!!pt.assumed,dateLabel,sessionKey:sk,capacity:this._calendarCapacity(def.key,def.code),bbox:{left:Math.max(0,(minX-4)/pageW*100),top:Math.max(0,(minY-3)/pageH*100),width:Math.min(100,(maxR-minX+10)/pageW*100),height:Math.min(100,(maxB-minY+8)/pageH*100)}});for(let j=first;j<=end;j++)used.add(j);i=end;
     }
@@ -15117,12 +15172,14 @@ class Component extends DCLogic {
   _calendarDetectMonthYear(text,fileName){
     const months=[['january','jan'],['february','feb'],['march','mar'],['april','apr'],['may','may'],['june','jun'],['july','jul'],['august','aug'],['september','sep','sept'],['october','oct'],['november','nov'],['december','dec']];
     const src=(String(text||'')+' '+String(fileName||'')).replace(/[_-]+/g,' ').replace(/\s+/g,' ').trim();
+    // The calendar's own title comes first; a later mention of another month ("Registration for
+    // January 2027 opens…") must not win just because January is earlier in the year.
+    let best=null;
     for(let i=0;i<months.length;i++){
       const names=months[i].map(x=>x.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('|');
-      let m=src.match(new RegExp('(?:^|[^A-Za-z])(?:'+names+')(?:\\.|\\s+Calendar)?\\s*[,\\-/ ]*\\s*(20\\d{2})(?:[^0-9]|$)','i'));
-      if(!m)m=src.match(new RegExp('(20\\d{2})\\s*[,\\-/ ]*\\s*(?:'+names+')(?:\\.|[^A-Za-z]|$)','i'));
-      if(m)return {month:i+1,year:Number(m[1])};
+      [new RegExp('(?:^|[^A-Za-z])(?:'+names+')(?:\\.|\\s+Calendar)?\\s*[,\\-/ ]*\\s*(20\\d{2})(?:[^0-9]|$)','i'),new RegExp('(20\\d{2})\\s*[,\\-/ ]*\\s*(?:'+names+')(?:\\.|[^A-Za-z]|$)','i')].forEach(rx=>{const m=src.match(rx);if(m&&(!best||m.index<best.at))best={at:m.index,month:i+1,year:Number(m[1])};});
     }
+    if(best)return {month:best.month,year:best.year};
     const numeric=src.match(/(?:^|\D)(0?[1-9]|1[0-2])\s*[\/.-]\s*(20\d{2})(?:\D|$)/);
     if(numeric)return {month:Number(numeric[1]),year:Number(numeric[2])};
     return {month:0,year:0};
@@ -15231,7 +15288,10 @@ class Component extends DCLogic {
         const rawText=(tc.items||[]).map(it=>String((it&&it.str)||'')).join(' ').replace(/\s+/g,' ').trim();
         const whole=lines.map(x=>x.text).join(' ').replace(/\s+/g,' ').trim();
         const searchable=(rawText+' '+whole).replace(/\s+/g,' ').trim();
-        const detected=this._calendarDetectMonthYear(searchable,file.name);
+        // Prefer the title printed above the Sun–Sat header row; footers often mention next month.
+        const wdL=lines.filter(l=>/^(?:Sun|Mon|Tue|Wed|Thu|Fri|Sat)(?:day|nesday|urday|sday)?$/i.test(String(l.text||'').trim())),wdY=new Set(wdL.map(l=>String(l.text).slice(0,3).toLowerCase())).size>=3?Math.min(...wdL.map(l=>l.y)):null;
+        const headDet=wdY!=null?this._calendarDetectMonthYear(lines.filter(l=>l.y<wdY-2).map(l=>l.text).join(' '),''):{month:0,year:0};
+        const detected=(headDet.month&&headDet.year)?headDet:((month&&year)?{month:0,year:0}:this._calendarDetectMonthYear(searchable,file.name));
         if(detected.month&&detected.year){
           if(month&&year&&(month!==detected.month||year!==detected.year))throw new Error('The PDF appears to contain more than one calendar month/year. Upload one monthly calendar at a time.');
           month=detected.month;year=detected.year;
@@ -15263,7 +15323,6 @@ class Component extends DCLogic {
       if(!gridPages)throw new Error('No Sunday-Saturday calendar grid was detected. This file may not be the official HASC calendar format.');
       const ss=[],seenS=new Set();allSessions.forEach(x=>{if(!seenS.has(x.sessionKey)){seenS.add(x.sessionKey);ss.push(x);}});
       const hh=[],seenH=new Set();holidays.forEach(x=>{const k=x.day+'|'+x.label.toLowerCase();if(x.label&&!seenH.has(k)){seenH.add(k);hh.push(x);}});
-      if(!ss.length)throw new Error('The calendar grid was found, but no configured training sessions were detected. Check that the course names match active Course Library instructor-led courses.');
       // Never silently approve a visibly incomplete parse.  If the grid still contains more
       // recognizable training titles than the session records we produced, stop here and make
       // the administrator re-review rather than publishing a partial month.
@@ -15272,6 +15331,8 @@ class Component extends DCLogic {
         const detail=skippedEntries.slice(0,8).map(x=>mon+' '+x.day+' (page '+x.page+'): “'+x.text+'” — '+x.reason).join('; ');
         throw new Error('Calendar parsing captured '+ss.length+' session'+(ss.length===1?'':'s')+', but '+skippedEntries.length+' visible training entr'+(skippedEntries.length===1?'y was':'ies were')+' not captured, so approval was blocked rather than publishing a partial calendar. Not captured: '+detail+(skippedEntries.length>8?'; …':'')+'. Correct the entry in the PDF (or add the course to the Course Library) and re-upload.');
       }
+      // Checked after the skipped entries so a month whose only entries were unreadable says which ones.
+      if(!ss.length)throw new Error('The calendar grid was found, but no configured training sessions were detected. Check that the course names match active Course Library instructor-led courses.');
       if(this.__calendarDraftUrls)this.__calendarDraftUrls.forEach(u=>{try{URL.revokeObjectURL(u);}catch(e){}});
       this.__calendarDraftUrls=tempUrls.slice();this.__calendarDraftAssets=assets;
       const key=this._calendarKey(year,month),draft={id:'cal-'+key,key,year,month,monthLabel:this._calendarMonthLabel(year,month),fileName:file.name,pageCount:pdf.numPages,gridPageCount:gridPages,zoomId,zoomLink,address,sessions:ss,holidays:hh,pages:pagesMeta,previewUrls:tempUrls.slice(),analyzedAt:new Date().toISOString()};
@@ -15289,6 +15350,15 @@ class Component extends DCLogic {
     if(sl&&xl&&sl!=='tbd'&&xl!=='tbd'&&sl!==xl)return false;
     return true;
   }
+  _calendarCancelledMatch(x){ return (this.state.cancelledSessions||[]).find(c=>String(c.calendarSourceSessionKey||'')===x.sessionKey||this._calendarSessionMatch(x,c))||null; }
+  // Differences between a calendar draft and what is already scheduled, shown before approval.
+  _calendarRevisionIssues(d){
+    if(!d||!Array.isArray(d.sessions))return [];
+    const live=this.state.sessions||[],out=[],matched=new Set(),unmatched=[],iso=s=>{const o=this.sessionDateObj(s);return o?o.getFullYear()+'-'+String(o.getMonth()+1).padStart(2,'0')+'-'+String(o.getDate()).padStart(2,'0'):'';},fmtDay=x=>x.dateLabel||x.iso;
+    d.sessions.forEach(x=>{const s=live.find(s=>String(s.calendarSourceSessionKey||'')===x.sessionKey)||live.find(s=>this._calendarSessionMatch(x,s));if(s){matched.add(s.id);return;}if(this._calendarCancelledMatch(x)){out.push(fmtDay(x)+' · '+x.title+' '+x.time+' was cancelled in the LMS and will not be re-created. Add it manually if the class is back on.');return;}unmatched.push(x);});
+    unmatched.forEach(x=>{const old=live.find(s=>!matched.has(s.id)&&s.calendarSourceKey===d.key&&iso(s)===x.iso&&this.sessionCourseKeyFor(s)===x.key&&(s.roster||[]).length);if(!old)return;matched.add(old.id);out.push(fmtDay(x)+' · '+x.title+': the PDF now shows '+x.time+' · '+x.where+', but '+(old.roster||[]).length+' registrant(s) are on the existing '+this.remTimeRange(old)+' · '+(old.where||'TBD')+' session. Approval adds a new session and flags the old one; move or notify the registrants from Scheduled Sessions.');});
+    return out;
+  }
   async publishOfficialCalendar(){
     if(this.state.role!=='admin'){this.setState({calImportError:'Administrator access is required to publish official calendars.',calImportMsg:''});return;}
     const d=this.state.calImportDraft;
@@ -15297,11 +15367,15 @@ class Component extends DCLogic {
     this.setState({calImportBusy:true,calImportMsg:'Approving '+d.monthLabel+' and creating registration sessions…',calImportError:''});
     try{
       const calId='cal-'+d.key; await this._opsPut('officialCalendarAssets:'+calId,this.__calendarDraftAssets);
-      let sessions=(this.state.sessions||[]).slice(),created=0,updated=0; const importedKeys=new Set(),nowIso=new Date().toISOString();
+      let sessions=(this.state.sessions||[]).slice(),created=0,updated=0,skippedCancelled=0; const importedKeys=new Set(),nowIso=new Date().toISOString();
       d.sessions.forEach(x=>{
         importedKeys.add(x.sessionKey); let idx=sessions.findIndex(s=>String(s.calendarSourceSessionKey||'')===x.sessionKey); if(idx<0)idx=sessions.findIndex(s=>this._calendarSessionMatch(x,s));
+        // A class the Training Department cancelled in the LMS stays cancelled when the same month is re-uploaded.
+        if(idx<0&&this._calendarCancelledMatch(x)){skippedCancelled++;return;}
         const _defaultInstructor=this.sessionDefaultInstructorText(x.key),fields={code:x.code,title:x.title,date:x.iso,when:x.dateLabel+' · '+x.time,where:x.where,capacity:x.capacity,status:'Scheduled',registrationOpen:true,calendarApproved:true,calendarApprovedAt:nowIso,calendarSourceId:calId,calendarSourceKey:d.key,calendarSourceSessionKey:x.sessionKey,calendarImportedAt:nowIso,calendarRevisionConflict:false,calendarRevisionNote:'',...(_defaultInstructor?{instructor:_defaultInstructor}:{})};
-        if(idx>=0){sessions[idx]={...sessions[idx],...fields};updated++;}else{sessions.push({id:'calSess'+Date.now()+'_'+created+'_'+Math.floor(Math.random()*10000),...fields,instructor:_defaultInstructor||'',roster:[],certified:false,att:{},pass:{}});created++;}
+        // Capacity, instructor and status never come from the PDF; keep what the session already has
+        // (admin edits, certified/in-progress status) and refresh only the printed details.
+        if(idx>=0){const cur=sessions[idx],keep={};['capacity','instructor','status','registrationOpen'].forEach(k=>{if(cur[k]!=null&&cur[k]!=='')keep[k]=cur[k];});sessions[idx]={...cur,...fields,...keep};updated++;}else{sessions.push({id:'calSess'+Date.now()+'_'+created+'_'+Math.floor(Math.random()*10000),...fields,instructor:_defaultInstructor||'',roster:[],certified:false,att:{},pass:{}});created++;}
       });
       // Revised PDFs may remove a class. Delete only untouched imports. If the class already has
       // requests, registrations, attendance, pass/fail, reminders, or completions, keep it and flag
@@ -15320,7 +15394,7 @@ class Component extends DCLogic {
       const meta={id:calId,key:d.key,year:d.year,month:d.month,monthLabel:d.monthLabel,fileName:d.fileName,pageCount:d.pageCount,gridPageCount:d.gridPageCount||d.pageCount,zoomId:d.zoomId,zoomLink:d.zoomLink,address:d.address,sessionCount:d.sessions.length,holidays:d.holidays,pages:d.pages,hotspots,artVersion:2,uploadedAt:nowIso,uploadedBy:(this.state.currentUser&&this.state.currentUser.name)||'Admin'};
       let rows=(this.state.officialCalendars||[]).filter(c=>c.key!==d.key);rows.push(meta);rows=await this._calendarSaveCatalog(rows);
       this.__calendarAssetUrls=this.__calendarAssetUrls||{}; if(this.__calendarAssetUrls[calId])this.__calendarAssetUrls[calId].forEach(u=>{try{URL.revokeObjectURL(u);}catch(e){}});this.__calendarAssetUrls[calId]=this.__calendarDraftAssets.map(b=>URL.createObjectURL(b));
-      const msg=d.monthLabel+' approved · '+created+' registration session(s) added · '+updated+' matched/updated · future sessions are available in Register'+(removed?' · '+removed+' obsolete untouched import(s) removed':'')+(preserved?' · '+preserved+' operational session(s) flagged for review':'');
+      const msg=d.monthLabel+' approved · '+created+' registration session(s) added · '+updated+' matched/updated · future sessions are available in Register'+(removed?' · '+removed+' obsolete untouched import(s) removed':'')+(preserved?' · '+preserved+' operational session(s) flagged for review':'')+(skippedCancelled?' · '+skippedCancelled+' class(es) cancelled in the LMS were not re-created':'');
       this.setState({officialCalendars:rows,sessions,calImportBusy:false,calImportDraft:null,calImportMsg:msg,calendarAssetVer:(this.state.calendarAssetVer||0)+1});
       this._scheduleOperationalPersist();this.logAudit('Official training calendar approved and sessions published',{target:d.monthLabel,next:d.sessions.length+' session(s)',notes:d.fileName+' · original HASC artwork retained · '+d.holidays.length+' holiday/note item(s) · '+preserved+' revision conflict(s)',sev:preserved?'Warning':'Info',relatedId:calId});
       if(this.__calendarDraftUrls){this.__calendarDraftUrls.forEach(u=>{try{URL.revokeObjectURL(u);}catch(e){}});this.__calendarDraftUrls=null;this.__calendarDraftAssets=null;}
@@ -16742,7 +16816,7 @@ class Component extends DCLogic {
         // one is chosen, so the list cannot suggest enrolling someone in an unrelated class.
         const sess=(S.sessions||[]).filter(x=>{
           if(S.fuCode && String(x.code||'').toUpperCase()!==String(S.fuCode).toUpperCase()) return false;
-          const d=new Date(x.date); return !isNaN(d) ? d>=new Date(new Date().toDateString()) : true;
+          const d=this.parseSessionDate(x.date); return !isNaN(d) ? d>=new Date(new Date().toDateString()) : true;
         }).slice(0,60).map(x=>{
           const cap=this.sessionCapacityLive(x.id)||{remaining:0,capacity:0,used:0};
           return {id:x.id, label:(this.SHORT_NAME[x.code]||x.title||x.code)+'  \u00b7  '+(x.date||'')+(x.when?(' '+x.when):'')+
@@ -16834,6 +16908,7 @@ class Component extends DCLogic {
       onCalSkipUnreadable:()=>this.skipUnreadableCalendar(),
       calDraftHas:!!_calDraft, calDraftMonth:_calDraft?_calDraft.monthLabel:'', calDraftFile:_calDraft?_calDraft.fileName:'', calDraftPageCount:_calDraft?_calDraft.pageCount:0, calDraftSessionCount:_calDraft?_calDraft.sessions.length:0, calDraftHolidayCount:_calDraft?_calDraft.holidays.length:0,
       calDraftPages:_calDraft?_calDraft.previewUrls.map((u,i)=>({page:i+1,src:u,alt:_calDraft.monthLabel+' official HASC calendar page '+(i+1)})):[],
+      ...(()=>{const iss=_calDraft?this._calendarRevisionIssues(_calDraft):[];return {calDraftRevisionHas:iss.length>0,calDraftRevision:iss.map((t,i)=>({key:'rv'+i,text:t}))};})(),
       calDraftSessions:_calDraft?_calDraft.sessions.map(x=>({date:x.dateLabel,title:x.title,time:x.time+(x.timeAssumed?'  ·  AM/PM assumed':''),where:x.where})):[],
       calDraftAssumedHas:!!(_calDraft&&_calDraft.sessions.some(x=>x.timeAssumed)), calDraftAssumedNote:_calDraft?(_calDraft.sessions.filter(x=>x.timeAssumed).length+' session'+(_calDraft.sessions.filter(x=>x.timeAssumed).length===1?' was':'s were')+' printed without AM/PM on the calendar. The importer read them as normal training hours and marked them below. Check those rows before approving.'):'', calDraftHolidays:_calDraft?_calDraft.holidays.map(h=>({day:new Date(_calDraft.year,_calDraft.month-1,h.day).toLocaleDateString('en-US',{month:'short',day:'numeric'}),label:h.label})):[], calDraftHasHolidays:!!(_calDraft&&_calDraft.holidays.length), calDraftZoom:(_calDraft&&_calDraft.zoomId)||'Not listed', calDraftAddress:(_calDraft&&_calDraft.address)||'1221 E14th ST',
       onCalPublish:()=>this.publishOfficialCalendar(), onCalDraftCancel:()=>this.skipQueuedCalendar(),
