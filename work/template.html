@@ -8145,15 +8145,15 @@ class Component extends DCLogic {
   // Earliest non-voided, non-future completion date per staff|code from completion records.
   _earliestCompletionIndex(){
     return this._memo('earliestCompIdx',[this.state.docs&&this.state.docs.completions,this.state.docs&&this.state.docs.completionVoids,this.TODAY_MDY.join('/')],()=>{
-      const m=new Map(), docs=this.state.docs||{}, vk=new Set((docs.completionVoids||[]).map(v=>v.key)), todayVal=this._todayVal();
-      (docs.completions||[]).forEach(x=>{ if(!x||x.referenceSuperseded===true||x.countsTowardCompliance===false||x.counts_toward_compliance===false) return; const sid=this.completionStaffId(x), date=this.completionDate(x); if(!sid||!date||date==='\u2014') return; const dv=this.compDateVal(date); if(!dv||dv>todayVal) return;
+      const m=new Map(), docs=this.state.docs||{}, vi=this.voidIndex(docs), vk=vi.keys, todayVal=this._todayVal();
+      (docs.completions||[]).forEach(x=>{ if(!x||x.referenceSuperseded===true||x.countsTowardCompliance===false||x.counts_toward_compliance===false) return; if(this.isCompletionVoided(x,vi)) return; const sid=this.completionStaffId(x), date=this.completionDate(x); if(!sid||!date||date==='\u2014') return; const dv=this.compDateVal(date); if(!dv||dv>todayVal) return;
         this.completionRosterCodes(x).forEach(({code:k,via})=>{ if(vk.has(this.completionKey(sid,k,date))||vk.has(this.completionKey(sid,via,date))) return; const key=String(sid)+'|'+k, cur=m.get(key); if(!cur||dv<cur.v) m.set(key,{v:dv,date}); }); });
       return m; });
   }
   // First date the staff member completed `code`: the earliest of the current date, the preserved
   // superseded roster date (baseDt) and every completion record. A refresher never moves it later.
   firstCompletionDate(staff,code){
-    if(!staff) return null; const sid=String(staff.id), vk=new Set(((this.state.docs&&this.state.docs.completionVoids)||[]).filter(v=>String(v.staffId)===sid).map(v=>v.key));
+    if(!staff) return null; const sid=String(staff.id), vk=this.voidIndex().keys;
     const c=[staff.dt&&staff.dt[code], staff.baseDt&&staff.baseDt[code]].filter(d=>d&&d!=='\u2014'&&!vk.has(this.completionKey(sid,code,d))).map(d=>this.parseMDY(d)).filter(Boolean);
     const e=this._earliestCompletionIndex().get(sid+'|'+code); if(e){ const d=this.parseMDY(e.date); if(d) c.push(d); }
     if(!c.length) return null; return new Date(Math.min.apply(null,c.map(d=>d.getTime())));
@@ -8550,7 +8550,7 @@ class Component extends DCLogic {
   // The completion a certificate/transcript row stands for: the exact record id when known, else
   // the newest non-voided record for that staff + course + date. Never "last added for the course".
   resolveCompletion(staffId,code,date,completionId){
-    if(completionId!=null&&completionId!==''){ const c=this.completionRecordById(completionId); if(c) return c; }
+    if(completionId!=null&&completionId!==''){ const c=this.completionRecordById(completionId); if(c&&this.completionStaffId(c)===String(staffId)&&(!code||this.completionMatchesCode(c,String(code).toUpperCase())||this.completionCode(c)===String(code).toUpperCase())) return c; }
     if(!date||date==='\u2014') return null; const k=String(code||'').toUpperCase(),dv=this.compDateVal(date); if(!dv) return null; const vi=this.voidIndex();
     const list=this.completionsForStaff(staffId).filter(c=>c.referenceSuperseded!==true&&(this.completionMatchesCode(c,k)||this.completionCode(c)===k)&&this.compDateVal(this.completionDate(c))===dv);
     return list.filter(c=>!c.voided&&!this.isCompletionVoided(c,vi)).slice(-1)[0]||list.slice(-1)[0]||null; }
@@ -10556,7 +10556,7 @@ class Component extends DCLogic {
     if(Array.isArray(docs.completions)&&docs.completions.some(c=>!c||typeof c!=='object')) return bad('The backup file is damaged: some completion records are not objects. Nothing was changed.');
     const cur=this.state.docs||{}, n=(v)=>Array.isArray(v)?v.length:(v&&typeof v==='object'?Object.keys(v).length:0);
     const lines=[]; const row=(label,a,b)=>lines.push(label+': '+a+' now → '+b+' in file');
-    [['Completions','completions'],['Voided completions','completionVoids'],['Archived staff IDs','archived'],['Attendance sheets','sheets'],['External certificates','extCerts'],['Import batches','importBatches']].forEach(([l,k])=>{ if(k in docs) row(l,n(cur[k]),n(docs[k])); });
+    [['Completions','completions'],['Voided completions','completionVoids'],['Archived staff IDs','archived'],['Attendance sheets','sheets'],['External certificates','extCerts'],['Import batches','importBatches']].forEach(([l,k])=>{ if(!(k in docs)) return; if(k==='completionVoids') row(l,this.activeVoids(cur).length,this.activeVoids(docs).length); else row(l,n(cur[k]),n(docs[k])); });
     if(op){ [['Staff (roster)','roster'],['Sessions','sessions'],['Requests','requests'],['Locations','locations'],['Instructors','instructors'],['Audit log entries','auditLog']].forEach(([l,k])=>{ if(Array.isArray(op[k])) row(l,n(this.state[k]),n(op[k])); }); }
     if(profiles) row('Locations with requirement rules',n(this.state.locReqProfiles),n(profiles));
     if(lib&&Array.isArray(lib.customCourses)) row('Course Library courses',n(this.state.customCourses),n(lib.customCourses));
@@ -10567,6 +10567,14 @@ class Component extends DCLogic {
     const plan=this.backupRestorePlan(d); if(plan.error){ this.setState({backupMsg:plan.error}); this.toast(plan.error); return; }
     if(typeof window!=='undefined'&&window.confirm&&!window.confirm(plan.summary)){ this.setState({backupMsg:'Restore cancelled — nothing was changed.'}); return; }
     await this.applyBackupRestore(plan, f.name||'backup file'); }
+  // Roster dates driven by a completion present in `oldDocs` but absent from `newDocs` are reset,
+  // using the void fallback (other completions, preserved baseDt, reference snapshot).
+  _retractRemovedCompletions(roster,oldDocs,newDocs){
+    const keysOf=(docs)=>{ const s=new Set(); ((docs&&docs.completions)||[]).forEach(c=>{ const sid=this.completionStaffId(c),date=this.completionDate(c); if(!sid||!date) return; this.completionRosterCodes(c).forEach(({code})=>s.add(this.completionKey(sid,code,date))); }); return s; };
+    const keep=keysOf(newDocs), gone=[...keysOf(oldDocs)].filter(k=>!keep.has(k)); if(!gone.length) return roster;
+    const fake=gone.map((key,i)=>{ const p=key.split('|'); return {voidId:'retract_'+i,key,staffId:p[0],code:p[1],completionDate:p.slice(2).join('|')}; });
+    return this.applyVoidsToRoster(roster,{completions:(newDocs&&newDocs.completions)||[],completionVoids:fake});
+  }
   async applyBackupRestore(plan, label){
     // Automatic pre-restore backup; abort if it cannot be kept.
     const pre={savedAt:new Date().toISOString(), payload:this.backupPayload()};
@@ -10574,7 +10582,11 @@ class Component extends DCLogic {
     const docs={...this.state.docs}; Object.keys(plan.docs).forEach(k=>{ if(plan.docs[k]!==undefined&&plan.docs[k]!==null) docs[k]=plan.docs[k]; });
     const nd=this._normalizeDocs(docs), op=plan.op||{}, next={};
     this.BACKUP_OPS_FIELDS.forEach(k=>{ if(op[k]!==undefined&&op[k]!==null&&k!=='roster') next[k]=op[k]; });
-    const baseRoster=Array.isArray(op.roster)&&op.roster.length?op.roster:this.state.roster;
+    const hasRoster=Array.isArray(op.roster)&&op.roster.length;
+    // A records-only restore replays onto the live roster, whose dates already include completions
+    // that the restored file may not contain. Retract those first (falling back to preserved or
+    // reference history, like a void) so compliance equals what the restored records support (R2-01).
+    const baseRoster=hasRoster?op.roster:this._retractRemovedCompletions(this.state.roster,this.state.docs||{},nd);
     next.roster=this.applyCompletionsToRoster(this.applyVoidsToRoster(baseRoster,nd),nd);
     if(plan.lib){ if(Array.isArray(plan.lib.customCourses)) next.customCourses=plan.lib.customCourses; if(Array.isArray(plan.lib.onlineCourses)) next.onlineCourses=[...plan.lib.onlineCourses.filter(c=>c&&!c.scorm),...(this.state.onlineCourses||[]).filter(c=>c&&c.scorm)]; }
     const ok=await this.saveDocs(nd); if(ok===false){ this.setState({backupMsg:'Restore could not be saved to this browser’s storage; reload to return to the previous data.'}); }
@@ -10972,7 +10984,7 @@ class Component extends DCLogic {
   completionKey(staffId, code, date){ return String(staffId)+'|'+String(code)+'|'+String(date||'').replace(/\s+/g,''); }
   // Voids are append-only. A later {type:'reinstated'} entry cancels the void it names (voidId)
   // instead of deleting it, so the void history survives an un-void.
-  activeVoids(docs){ const all=((docs||this.state.docs||{}).completionVoids)||[]; if(!all.some(v=>v&&v.type==='reinstated')) return all.filter(v=>v&&v.key); const re=new Set(all.filter(v=>v&&v.type==='reinstated').map(v=>v.reinstatesVoidId)); return all.filter(v=>v&&v.key&&v.type!=='reinstated'&&!re.has(v.voidId)); }
+  activeVoids(docs){ const all=((docs||this.state.docs||{}).completionVoids)||[]; if(!all.some(v=>v&&v.type==='reinstated')) return all.filter(v=>v&&v.key); const re=new Set(all.filter(v=>v&&v.type==='reinstated'&&v.reinstatesVoidId).map(v=>String(v.reinstatesVoidId))); return all.filter(v=>v&&v.key&&v.type!=='reinstated'&&!(v.voidId&&re.has(String(v.voidId)))); }
   // Void entries written with a completionId target that one completion record. Older entries
   // (and voids of roster-only rows) carry only the staff|code|date key and keep matching by key.
   voidIndex(docs){ const arr=((docs||this.state.docs||{}).completionVoids)||[]; this.__vidx=this.__vidx||new WeakMap(); const hit=this.__vidx.get(arr); if(hit) return hit;
@@ -11908,10 +11920,11 @@ class Component extends DCLogic {
   // manual void uses (audited, reversible history), then replaying the roster.
   undoTrainingImport(batchId){ const cu=this.state.currentUser; if(!cu||cu.role!=='admin'){this.toast('Only administrators can undo a training import.');return false;}
     const docs0=this.state.docs, batch=(docs0.importBatches||[]).find(b=>b&&b.id===batchId); if(!batch){this.toast('Import batch not found.');return false;} if(batch.undoneAt){this.toast('That import was already undone.');return false;}
-    const comps=(docs0.completions||[]).filter(c=>c&&c.importBatchId===batchId); const existing=new Set((docs0.completionVoids||[]).map(v=>v.key)), d=this.staffChangeStamp(), reason='Training import undone: '+(batch.fileName||batchId), entries=[];
+    const comps=(docs0.completions||[]).filter(c=>c&&c.importBatchId===batchId); const _vi=this.voidIndex(docs0), d=this.staffChangeStamp(), reason='Training import undone: '+(batch.fileName||batchId), entries=[];
     if(window.confirm&&!window.confirm('Undo training import "'+(batch.fileName||batchId)+'" ('+(batch.importedAt||'')+')?\n\n'+comps.length+' imported completion(s) will be voided with reason "'+reason+'". Compliance, transcripts and certificates recalculate immediately; the void entries stay in the audit trail.')) return false;
     comps.forEach((c,ci)=>{ const sid=String(this.completionStaffId(c)), date=this.completionDate(c), st=this.staffById(sid), main=String(this.completionComplianceCode(c)||this.completionCode(c)||'').toUpperCase(); const codes=[...new Set([main,...this.completionRosterCodes(c).map(x=>x.code)].filter(Boolean))];
-      codes.forEach((code,i)=>{ const key=this.completionKey(sid,code,date); if(existing.has(key)) return; existing.add(key); entries.push({voidId:'vd'+d.t+'_'+ci+'_'+i+'_'+Math.floor(Math.random()*10000),key,staffId:sid,staffName:st?this.dispName(st):sid,empId:sid,locName:st?(st.loc||''):'',code,course:this.COURSE_NAME[code]||c.displayCourseTitle||code,family:this.compFamily(code),completionDate:date,expires:c.expires||'',source:c.source||'Training record import',sourceBucket:'import',sessionId:'',certId:c.certGenerated?(c.certId||''):'',certVoided:!!c.certGenerated,reason,voidedBy:cu.name||'Admin',voidDate:d.ts,t:d.t,priorStatus:(i===0&&st)?this.effStatusLabel(st,code):'',newStatus:'',importBatchId:batchId}); }); });
+      const cid=this.completionIdValue(c); if(cid!=null&&_vi.ids.has(String(cid))) return;
+      codes.forEach((code,i)=>{ const key=this.completionKey(sid,code,date); entries.push({voidId:'vd'+d.t+'_'+ci+'_'+i+'_'+Math.floor(Math.random()*10000),key,completionId:cid!=null?String(cid):'',staffId:sid,staffName:st?this.dispName(st):sid,empId:sid,locName:st?(st.loc||''):'',code,course:this.COURSE_NAME[code]||c.displayCourseTitle||code,family:this.compFamily(code),completionDate:date,expires:c.expires||'',source:c.source||'Training record import',sourceBucket:'import',sessionId:'',certId:c.certGenerated?(c.certId||''):'',certVoided:!!c.certGenerated,reason,voidedBy:cu.name||'Admin',voidDate:d.ts,t:d.t,priorStatus:(i===0&&st)?this.effStatusLabel(st,code):'',newStatus:'',importBatchId:batchId}); }); });
     const docs={...docs0,completionVoids:[...entries,...(docs0.completionVoids||[])],importBatches:(docs0.importBatches||[]).map(b=>b&&b.id===batchId?{...b,undoneAt:new Date().toISOString(),undoneBy:cu.name||'Admin',voidedCount:entries.length}:b)};
     const roster=this.applyCompletionsToRoster(this.applyVoidsToRoster(this.state.roster,docs),docs), byId=new Map(roster.map(r=>[String(r.id),r])); entries.forEach(e=>{ const ns=byId.get(String(e.staffId)); e.newStatus=ns?this.effStatusLabel(ns,e.code):'\u2014'; });
     this.saveDocs(docs); this.setState({roster,trainingImportLastBatch:null,trainingImportMsg:'Training import '+(batch.fileName||batchId)+' undone: '+comps.length+' completion(s) voided.'});
@@ -16322,7 +16335,7 @@ class Component extends DCLogic {
     let team, mgrCols, matrixHeads, matrixRows, matrixError, matrixFlagged, totalCells=0, greenCells=0;
     let _mvRed=0,_mvDue=0;
     if(_mgrOverviewTab){
-      const _mv=this._mgrMatrixView((cu&&cu.empId)||'mgr', _allRoster, this.state.mLoc, this.state.mSearch, this.state.repShow, _artFirst);
+      const _homeTab=tab==='home'; const _mv=this._mgrMatrixView((cu&&cu.empId)||'mgr', _allRoster, _homeTab?'':this.state.mLoc, _homeTab?'':this.state.mSearch, this.state.repShow, _artFirst);
       team=_mv.team; mgrCols=_mv.mgrCols; matrixHeads=_mv.matrixHeads; matrixRows=_mv.matrixRows; matrixError=_mv.matrixError; matrixFlagged=_mv.matrixFlagged; totalCells=_mv.totalCells; greenCells=_mv.greenCells; _mvRed=_mv.redStaff; _mvDue=_mv.dueStaff;
     } else {
       team=[]; mgrCols=[]; matrixHeads=[]; matrixRows=[]; matrixError=null; matrixFlagged=0;
@@ -17645,13 +17658,18 @@ onCiUseStd:()=>this.setState({ciDesc:this.courseSheetSummaryDefault(this.state.c
     this.setState({locReqDraft:null}); this._reasonDraft=''; this.toast((codes.length>1?(codes.length+' location requirements saved'):'Location requirement saved')+(d.effMode==='future'?(' (effective '+(d.effDate||this.formatMDY(this.todayDate()))+')'):'')+' — reports & dashboards updated.'); }
 
   removeLocReqOverride(locId, code){ const loc=(this.state.locations||[]).find(l=>l.id===locId); const prevOv=((this.locProfile(locId)||{}).overrides||{})[code]||null; if(!prevOv) return;
-    const profs=JSON.parse(JSON.stringify(this.state.locReqProfiles||{})); if(profs[locId]&&profs[locId].overrides){ delete profs[locId].overrides[code]; profs[locId].updatedAt=this.locReqStamp(); }
+    const profs=JSON.parse(JSON.stringify(this.state.locReqProfiles||{}));
+    // Removing a SCHEDULED change cancels only that change: the rule in effect (kept in .prev) stays (R2-04).
+    if(this._ovPending(prevOv)&&prevOv.prev){ const keepOv=JSON.parse(JSON.stringify(prevOv.prev)); if(profs[locId]&&profs[locId].overrides){ profs[locId].overrides[code]=keepOv; profs[locId].updatedAt=this.locReqStamp(); } this.commitLocReqProfiles(profs);
+      this.logAudit('Location Requirement Changed',{ target:(loc?loc.name:locId)+' \u00b7 '+this.courseLabel(code), prev:this.locRuleText(prevOv)+' (scheduled '+prevOv.effDate+')', next:this.locRuleText(keepOv), notes:'Scheduled change cancelled \u2014 the rule in effect remains.', sev:'Compliance', relatedId:'locreq:'+locId+':'+code });
+      this.toast('Scheduled change cancelled. The current '+this.courseLabel(code)+' rule for '+(loc?loc.name:'this location')+' remains.'); return; }
+    if(profs[locId]&&profs[locId].overrides){ delete profs[locId].overrides[code]; profs[locId].updatedAt=this.locReqStamp(); }
     this.commitLocReqProfiles(profs);
     this.logAudit('Location Requirement Changed',{ target:(loc?loc.name:locId)+' \u00b7 '+this.courseLabel(code), prev:this.locRuleText(prevOv), next:'Inherit global default', notes:'Location override removed \u2014 course reverts to HASC global rule. Historical completions preserved.', sev:'Compliance', relatedId:'locreq:'+locId+':'+code });
     this.toast(this.courseLabel(code)+' restored to global default for '+(loc?loc.name:'this location')+'.'); }
 
   restoreLocDefaults(locId){ const loc=(this.state.locations||[]).find(l=>l.id===locId); const prof=this.locProfile(locId); const n=prof&&prof.overrides?Object.keys(prof.overrides).length:0; if(!n){ this.toast('No location-specific rules to restore.'); return; }
-    if(typeof window!=='undefined'&&window.confirm&&!window.confirm('Restore "'+(loc?loc.name:'this location')+'" to the HASC global default rules? This removes all '+n+' location-specific requirement override(s). Completion history is never touched.')) return;
+    if(typeof window!=='undefined'&&window.confirm&&!window.confirm('Restore "'+(loc?loc.name:'this location')+'" to the HASC global default rules? This removes all '+n+' location-specific requirement override(s), including any scheduled future changes. Completion history is never touched.')) return;
     const profs=JSON.parse(JSON.stringify(this.state.locReqProfiles||{})); delete profs[locId]; this.commitLocReqProfiles(profs);
     this.logAudit('Location Requirement Changed',{ target:(loc?loc.name:locId)+' \u00b7 All courses', prev:n+' location override(s)', next:'Restored to HASC global defaults', notes:'All location-specific requirement overrides removed; location now follows agency-wide rules. Historical completions preserved.', sev:'Compliance', relatedId:'locreq:'+locId+':*' });
     this.setState(s=>({locReqDraft: (s.locReqDraft&&s.locReqDraft.locId===locId)?null:s.locReqDraft})); this.toast((loc?loc.name:'Location')+' restored to global default rules.'); }
@@ -17662,9 +17680,10 @@ onCiUseStd:()=>this.setState({ciDesc:this.courseSheetSummaryDefault(this.state.c
     let pathway='General non-SDCH staff'; if(this.isNurse(staff)) pathway='Nurse / RN'; else if(this.isSDCH(staff)) pathway='Self-Direction / Respite / Com Hab (SDCH)'; else if(this.isHousekeeperCook(staff)) pathway='Housekeeper / Cook (non-clinical)'; else if(this.isCoreCareRole(staff)) pathway='Core-care (DSP / Residence & Day-Program Manager)';
     const optionalTrack=this.OPTIONAL_TRACK.includes(code); const onTrack=optionalTrack?this.onSkillTrack(staff,code):null;
     const buckets=(this.LOC_REQ_BUCKETS||[]).filter(b=>this.staffInBucket(staff,b[0])).map(b=>b[1]);
-    const profOv=((this.locProfile(this.getLocationIdForStaff(staff))||{}).overrides||{})[code]||null;
+    const _rawOv=((this.locProfile(this.getLocationIdForStaff(staff))||{}).overrides||{})[code]||null; const profOv=this._ovInEffect(_rawOv); const _schedOv=(_rawOv&&this._ovPending(_rawOv))?_rawOv:null;
     let ovText='No location override — follows global rule', ovMatch='\u2014';
-    if(profOv){ ovText=this.locRuleText(profOv); if(profOv.buckets&&profOv.buckets.length){ ovMatch=profOv.buckets.some(b=>this.staffInBucket(staff,b))?('Matches scope ('+profOv.buckets.map(b=>this.bucketLabel(b)).join(', ')+')'):('Outside scope ('+profOv.buckets.map(b=>this.bucketLabel(b)).join(', ')+') \u2014 override ignored for this person'); } else ovMatch='Applies to all staff at this location'; }
+    if(_schedOv){ ovText='Scheduled from '+_schedOv.effDate+': '+this.locRuleText(_schedOv)+(profOv?' \u00b7 until then: ':' \u00b7 until then: global rule'); }
+    if(profOv){ ovText=(_schedOv?ovText:'')+this.locRuleText(profOv); if(profOv.buckets&&profOv.buckets.length){ ovMatch=profOv.buckets.some(b=>this.staffInBucket(staff,b))?('Matches scope ('+profOv.buckets.map(b=>this.bucketLabel(b)).join(', ')+')'):('Outside scope ('+profOv.buckets.map(b=>this.bucketLabel(b)).join(', ')+') \u2014 override ignored for this person'); } else ovMatch='Applies to all staff at this location'; }
     const iv=this.effInterval(staff,code); const expLabel= iv? ('Expires every '+(iv%365===0?(iv/365+(iv/365>1?' years':' year')):(Math.round(iv/30)+' months'))) : 'One-time / no expiration';
     const grace=this.effGraceWindow(staff,code); const inGrace=this.GRACE_COURSES.includes(code); const artDue=(code==='ART')?this.artInitialDueInfo(staff):null;
     // Orientation→SDCH equivalency trace (SDCH/Com Hab/Respite staff, SDCH 1/2 only).
