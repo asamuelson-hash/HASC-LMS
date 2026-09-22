@@ -357,11 +357,26 @@ window.HASC_COMPLETION_REFERENCE_20260915=[{"id":"2714","name":"Semel, Ben","pos
       return scope.some(function (s) { return n(s) === want; });
     },
 
+    /**
+     * Manager / area-coordinator read scope (decided policy, MGR-02). A manager may read a staff
+     * record when EITHER
+     *   (a) the staff member's location resolves (Location Directory name, alias or merge) to one of
+     *       the manager's assigned locations, OR
+     *   (b) the staff member is in the manager's reporting chain: their supervisor (mgrId) is the
+     *       manager, or any manager / area coordinator who reports to the manager, transitively.
+     * The app evaluates this in managerAuthorizedRoster() and registers it here at boot, so this
+     * layer and the portal cannot drift. RLS must implement the same union (location_managers join
+     * plus a recursive CTE over staff.manager_id); a location-only policy would under-grant.
+     */
+    _scopeResolver: null,
+    registerScopeResolver: function (fn) { this._scopeResolver = (typeof fn === 'function') ? fn : null; },
+
     /** Staff may always read their own record; everything else needs a capability. */
     canReadStaff: function (principal, staffRecord) {
       if (!principal || !staffRecord) return false;
       if (principal.staffId && String(principal.staffId) === String(staffRecord.id)) return true;
       if (this.can(principal.role, 'view_all_staff')) return true;
+      if (principal.role === 'manager' && this._scopeResolver) { try { return !!this._scopeResolver(principal, staffRecord); } catch (e) { return false; } }
       return this.inScope(principal, staffRecord.loc);
     }
   };
@@ -1889,6 +1904,12 @@ window.HASC_COMPLETION_REFERENCE_20260915=[{"id":"2714","name":"Semel, Ben","pos
           <button class="hasc-logout" onclick="{{ onLogout }}" style="border:1px solid rgba(255,255,255,.35);background:rgba(255,255,255,.1);color:#fff;border-radius:999px;font-weight:800;font-size:12px;padding:7px 13px;cursor:pointer">Log out</button>
         </div>
       </div>
+      <sc-if value="{{ hopActive }}" hint-placeholder-val="{{ false }}">
+        <div role="status" style="background:#FFD200;color:#1F3864;font-weight:800;font-size:12.5px;padding:7px 16px;display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap;text-align:center">
+          <span>{{ hopBanner }}</span>
+          <button onclick="{{ onHopReturn }}" style="border:1.5px solid #1F3864;border-radius:999px;background:#fff;color:#1F3864;font-weight:900;font-size:11.5px;padding:4px 11px;cursor:pointer">Return to my admin account</button>
+        </div>
+      </sc-if>
     </div>
 
     <!-- NAV -->
@@ -2327,7 +2348,7 @@ window.HASC_COMPLETION_REFERENCE_20260915=[{"id":"2714","name":"Semel, Ben","pos
                 <div style="font-size:12px;color:#667085;margin-top:3px">{{ item.detail }}</div></div>
                 <div style="display:flex;gap:8px;flex:none">
                   <button onclick="{{ item.onForward }}" style="border:0;border-radius:999px;background:{{ btn }};color:#fff;font-weight:800;font-size:12px;padding:8px 13px;cursor:pointer">Forward to admin</button>
-                  <button onclick="{{ item.onDeny }}" style="border:1.5px solid #E3E8F5;border-radius:999px;background:#fff;color:#667085;font-weight:800;font-size:12px;padding:8px 13px;cursor:pointer">Deny</button>
+                  <sc-if value="{{ item.canDeny }}" hint-placeholder-val="{{ false }}"><button onclick="{{ item.onDeny }}" style="border:1.5px solid #E3E8F5;border-radius:999px;background:#fff;color:#667085;font-weight:800;font-size:12px;padding:8px 13px;cursor:pointer">Deny</button></sc-if>
                 </div>
               </div>
             </sc-for>
@@ -2496,7 +2517,7 @@ window.HASC_COMPLETION_REFERENCE_20260915=[{"id":"2714","name":"Semel, Ben","pos
               <span style="border-radius:999px;padding:4px 11px;font-size:11px;font-weight:900;background:{{ item.statusBg }};color:{{ item.statusFg }}">{{ item.statusLabel }}</span>
               <sc-if value="{{ item.actionable }}" hint-placeholder-val="{{ false }}">
                 <button onclick="{{ item.onForward }}" style="border:0;border-radius:999px;background:{{ btn }};color:#fff;font-weight:800;font-size:12px;padding:8px 13px;cursor:pointer">Forward</button>
-                <button onclick="{{ item.onDeny }}" style="border:1.5px solid #E3E8F5;border-radius:999px;background:#fff;color:#667085;font-weight:800;font-size:12px;padding:8px 13px;cursor:pointer">Deny</button>
+                <sc-if value="{{ item.canDeny }}" hint-placeholder-val="{{ false }}"><button onclick="{{ item.onDeny }}" style="border:1.5px solid #E3E8F5;border-radius:999px;background:#fff;color:#667085;font-weight:800;font-size:12px;padding:8px 13px;cursor:pointer">Deny</button></sc-if>
               </sc-if>
             </div>
           </div>
@@ -7334,6 +7355,15 @@ class Component extends DCLogic {
     tplEditKey:null, tplDraft:null, tplPreview:null, tplMsg:'',
     missContactType:'', missContactLoc:'', missContactMgr:'',
   };
+  // Per-user working state: selections, search boxes, filters, packets, open modals/players and the
+  // first-login password form. Captured from the defaults above and restored on every sign-in,
+  // sign-out and portal hop, so nothing one person selected or generated on a shared workstation is
+  // shown to (or printable by) the next person. Data collections are deliberately not matched.
+  USER_STATE_DEFAULTS=(()=>{ const re=/^aud[A-Z]|Search$|Q$|Sel$|Selected$|SelectedIds$|StaffId$|Loc$|^(cp|vtGate|vtQuiz|vtPlay)[A-Z]/;
+    const named=['modal','pStep','pPick','instSession','mRegSession','remPreview','cancelModal','cancelReason','tplPreview','coursePlayerId','prSelected','rptPreviewRows','rptGenerated','fcDetail','vtUpdViewId','searchDrafts','vfSelStaff','apStaff','admStaff','auStaff','vfStaff','instrOvrFor','instrOvrText','locMergeFrom','locMergeTo','locAssignId'];
+    const o={}; Object.keys(this.state).forEach(k=>{ if(re.test(k)||named.includes(k)) o[k]=this.state[k]; });
+    return JSON.parse(JSON.stringify(Object.assign(o,{pwSetup:null,pwNew1:'',pwNew2:'',pwSetupErr:'',hopOrigin:null,why:null,vtCourse:null}))); })();
+  _userStateReset(keep){ const o=JSON.parse(JSON.stringify(this.USER_STATE_DEFAULTS)); (keep||[]).forEach(k=>delete o[k]); return o; }
 
   SESSION_COURSES=[{key:'O1',label:'Orientation 1',code:'O1'},{key:'O2',label:'Orientation 2',code:'O2'},{key:'O3',label:'Orientation 3',code:'O3'},{key:'SDCH1',label:'SDCH 1',code:'SDCH1'},{key:'SDCH2',label:'SDCH 2',code:'SDCH2'},{key:'ART',label:'Annual Required Training',code:'ART'},{key:'FA',label:'First Aid',code:'FA'},{key:'CPR_IN_PERSON',label:'CPR In-Person',code:'CPR'},{key:'CPR_BLENDED',label:'CPR Blended',code:'CPR'},{key:'PA',label:'Positive Approaches to Challenging Behaviors',code:'PA'},{key:'DYSPHAGIA',label:'Dysphagia',code:'DYS'},{key:'AMAP1',label:'AMAP Day 1',code:'AMAP1'},{key:'AMAP2',label:'AMAP Day 2',code:'AMAP2'},{key:'SCIP1',label:'SCIP Day 1',code:'SCIP1'},{key:'SCIP2',label:'SCIP Day 2',code:'SCIP2'},{key:'SCIP_RECERT',label:'SCIP Recertification',code:'SCIPR'}];
   SESSION_DEFAULT_LOC={O1:'Zoom',O2:'Zoom',O3:'Zoom',SDCH1:'Online',SDCH2:'Online',ART:'Online',FA:'Zoom',CPR_IN_PERSON:'East 14th Street',CPR_BLENDED:'East 14th Street',PA:'Zoom',DYSPHAGIA:'East 14th Street',AMAP1:'East 14th Street',AMAP2:'East 14th Street',SCIP1:'East 14th Street',SCIP2:'East 14th Street',SCIP_RECERT:'East 14th Street'};
@@ -7795,8 +7825,9 @@ class Component extends DCLogic {
     return this._memo('mgrAuthorized:'+String(cu.empId||cu.id||'')+':'+JSON.stringify(cu.assignedLocations||[]),[this.state.roster,this.state.locations],()=>{
       const byId=new Map();
       if(cu.empId) this.managerScopeRoster(cu.empId).forEach(r=>byId.set(String(r.id),r));
-      const wantedNames=new Set((cu.assignedLocations||[]).map(x=>this.normalizeLocationName(x)).filter(Boolean));
-      const wantedIds=new Set((cu.assignedLocations||[]).map(x=>this.getCanonicalLocation(x).locId).filter(Boolean));
+      const assigned=this._asLocList(cu.assignedLocations);
+      const wantedNames=new Set(assigned.map(x=>this.normalizeLocationName(x)).filter(Boolean));
+      const wantedIds=new Set(assigned.map(x=>this.getCanonicalLocation(x).locId).filter(Boolean));
       (this.state.roster||[]).forEach(r=>{
         const raw=this.normalizeLocationName(r.loc); const can=this.getStaffResolvedLocation(r);
         if(wantedNames.has(raw)||wantedNames.has(this.normalizeLocationName(can.name))||(can.locId&&wantedIds.has(can.locId))) byId.set(String(r.id),r);
@@ -7804,6 +7835,16 @@ class Component extends DCLogic {
       return [...byId.values()];
     });
   }
+  // Scope = assigned locations + reporting chain (see HASCPolicy). Split the visible scope so the
+  // header states both parts instead of listing every location reached through the chain.
+  managerScopeSplit(cu,ros){ const al=this._asLocList(cu&&cu.assignedLocations); if(al==='ALL') return {assigned:['All locations'],atLoc:(ros||[]).length,chain:0};
+    const names=new Set(al.map(x=>this.normalizeLocationName(x))), ids=new Set(al.map(x=>this.getCanonicalLocation(x).locId).filter(Boolean)); let atLoc=0;
+    (ros||[]).forEach(r=>{ const c=this.getStaffResolvedLocation(r); if(names.has(this.normalizeLocationName(r.loc))||names.has(this.normalizeLocationName(c.name))||(c.locId&&ids.has(c.locId))) atLoc++; });
+    const assigned=[...new Set(al.map(x=>{ const c=this.getCanonicalLocation(x); return c.locId?c.name:String(x); }))].sort();
+    return {assigned,atLoc,chain:(ros||[]).length-atLoc}; }
+  managerScopeLine(cu,ros){ const sp=this.managerScopeSplit(cu,ros); if(!sp.assigned.length&&!sp.chain) return 'No staff in your caseload';
+    return (sp.assigned.length?('Assigned locations: '+sp.assigned.join(', ')):'No assigned locations')+(sp.chain?(' \u00b7 +'+sp.chain.toLocaleString()+' staff via your reporting line'):''); }
+  _mgrScopeIdSet(cu){ const ros=this.managerAuthorizedRoster(cu); if(this.__msIdsFor!==ros){ this.__msIdsFor=ros; this.__msIds=new Set(ros.map(r=>String(r.id))); } return this.__msIds; }
   seatedRoster(sess){ return ((sess&&sess.roster)||[]).filter(x=>!x.waitlist); }
   // Area-coordinator scope = same transitive caseload walk (managers they oversee + the staff under those managers).
   areaCoordinatorScopeRoster(empId){ return this.managerScopeRoster(empId); }
@@ -7845,9 +7886,9 @@ class Component extends DCLogic {
   // Canonical locId set a manager/coordinator may see (derived from their actual transitive caseload).
   scopeLocIds(cu){
     cu=cu||this.state.currentUser; if(!cu) return new Set(); if(cu.role==='admin') return null;
-    const ros=cu.role==='manager'?this.managerAuthorizedRoster(cu):(this.state.roster||[]).filter(r=>(cu.assignedLocations||[]).map(l=>this.normalizeLocationName(l)).includes(this.normalizeLocationName(r.loc)));
+    const _al=this._asLocList(cu.assignedLocations); const ros=cu.role==='manager'?this.managerAuthorizedRoster(cu):(this.state.roster||[]).filter(r=>(_al==='ALL'?[]:_al).map(l=>this.normalizeLocationName(l)).includes(this.normalizeLocationName(r.loc)));
     const ids=new Set(); ros.forEach(r=>{ const id=this.getLocationIdForStaff(r); if(id) ids.add(id); });
-    (cu.assignedLocations==='ALL'?[]:(cu.assignedLocations||[])).forEach(l=>{ const id=this.getCanonicalLocation(l).locId; if(id) ids.add(id); });
+    (_al==='ALL'?[]:_al).forEach(l=>{ const id=this.getCanonicalLocation(l).locId; if(id) ids.add(id); });
     return ids;
   }
   /* ===================================================================
@@ -8153,7 +8194,8 @@ class Component extends DCLogic {
     return {first:p[0]||'',last:(p.length>1?p[p.length-1]:(p[0]||''))};
   }
   deriveEmail(name){ const p=this.nameParts(name); if(!p.first||!p.last) return ''; return ((p.first[0]||'')+p.last).toLowerCase().replace(/[^a-z]/g,'')+'@hasccenter.org'; }
-  savePwSetup(){ const s=this.state.pwSetup; if(!s) return; const a=String(this.state.pwNew1||''), b=String(this.state.pwNew2||'');
+  savePwSetup(){ const s=this.state.pwSetup; if(!s) return; const cu=this.state.currentUser;
+    if(!cu||cu.role!=='staff'||String(cu.staffId)!==String(s.staffId)){ this.setState({pwSetup:null,pwNew1:'',pwNew2:'',pwSetupErr:''}); return; } const a=String(this.state.pwNew1||''), b=String(this.state.pwNew2||'');
     const last=(this.nameParts(s.name).last||'').toLowerCase();
     if(a.length<6){ this.setState({pwSetupErr:'Password must be at least 6 characters.'}); return; }
     if(a!==b){ this.setState({pwSetupErr:'Passwords do not match.'}); return; }
@@ -8170,8 +8212,21 @@ class Component extends DCLogic {
     if(!this._dataReady){ this.__pendingLoginAttempt=true; this.setState({loginError:'LMS data is still loading. Your sign-in will continue automatically when loading finishes.'}); return; }
     this.__pendingLoginAttempt=false;
     const rk=this.state.loginRole; const email=(this.state.loginEmail||'').trim().toLowerCase(); const pwOk=this.checkPassword(rk,this.state.loginPw); let acct=null;
-    if(rk==='manager'){ const D=window.HASC_DATA||{}; const match=(a)=>a.email===email||this.deriveEmail(a.name)===email; const ac=(D.areaCoordinators||[]).find(match); const mg=(D.managers||[]).find(match); const f=ac||mg; if(f) acct={email:f.email,name:f.name,roleLabel: ac?'Area Coordinator':'Manager', empId:f.empId, assignedLocations:f.locations||[]}; }
-    else if(rk==='instructor'){ let f=(this.ACCOUNTS.instructor||[]).find(a=>(a.email||'').toLowerCase()===email); if(!f){ const rec=(this.state.instructors||[]).filter(i=>i.status==='active').find(i=>((i.email||'').toLowerCase()===email)||this.deriveEmail(i.fullName)===email); if(rec) f={email:rec.email||this.deriveEmail(rec.fullName), name:rec.fullName, roleLabel:'Instructor', assignedSessions:rec.assignedSessions||[]}; } acct=f; }
+    if(rk==='manager'){ const D=window.HASC_DATA||{}; const acs=D.areaCoordinators||[], mgs=D.managers||[];
+      // Exact email first. A derived first-initial+last-name address is accepted only when it points at
+      // one person (same empId); otherwise it would silently open whichever account is listed first.
+      const exact=(a)=>String(a.email||'').toLowerCase()===email, derived=(a)=>this.deriveEmail(a.name)===email;
+      let ac=acs.find(exact), mg=mgs.find(exact);
+      if(!ac&&!mg&&email){ const hits=[...acs,...mgs].filter(derived); if(new Set(hits.map(h=>String(h.empId))).size>1){ this.setState({loginError:'More than one manager shares this sign-in name. Please sign in with your full email address.'}); return; } ac=acs.find(derived); mg=mgs.find(derived); }
+      const f=ac||mg;
+      if(f){ if(pwOk){ const rec=this.staffById(f.empId);
+          // Same employment rule the staff path applies: a manager or coordinator must be an active,
+          // non-archived employee in the roster. Missing, inactive or archived records cannot sign in.
+          if(!rec||!this.isEmploymentActive(rec)){ this.setState({loginError:'This manager account is inactive. Contact the Training Department.'}); return; } }
+        acct={email:f.email,name:f.name,roleLabel: ac?'Area Coordinator':'Manager', empId:f.empId, assignedLocations:this.directoryLocationsFor(f.empId,f.locations)}; } }
+    else if(rk==='instructor'){ let f=(this.ACCOUNTS.instructor||[]).find(a=>(a.email||'').toLowerCase()===email);
+      if(f&&pwOk){ const ir=(this.state.instructors||[]).find(i=>(i.email||'').toLowerCase()===email||(i.fullName||'').toLowerCase()===String(f.name||'').toLowerCase()); if(ir&&ir.status==='inactive'){ this.setState({loginError:'This instructor account is inactive. Contact the Training Department.'}); return; } }
+      if(!f){ const rec=(this.state.instructors||[]).filter(i=>i.status==='active').find(i=>((i.email||'').toLowerCase()===email)||this.deriveEmail(i.fullName)===email); if(rec) f={email:rec.email||this.deriveEmail(rec.fullName), name:rec.fullName, roleLabel:'Instructor', assignedSessions:rec.assignedSessions||[]}; } acct=f; }
     else { acct=rk==='staff'?null:(this.ACCOUNTS[rk]||[]).find(a=>a.email===email);
       if(rk==='staff'){
         const active=(this.state.roster||[]).filter(r=>this.isEmploymentActive(r));
@@ -8194,7 +8249,7 @@ class Component extends DCLogic {
           return;
         } } }
     if(!acct||!pwOk){ this.setState({loginError:'Incorrect email or password.'}); return; } this.signIn(rk,acct); }
-  signIn(rk,acct){ if(!acct) return; const cu={ id:acct.email, name:acct.name, email:acct.email, role:rk, roleLabel:acct.roleLabel, initials:this.initials(acct.name), portal:this.PORTAL[rk], assignedLocations: rk==='admin'?'ALL':(acct.assignedLocations||[]), empId:acct.empId||null, assignedSessions:acct.assignedSessions||[], staffId:acct.staffId||null }; this.setState({currentUser:cu, role:rk, authStep:'select', loginError:'', loginPw:'', hopAdmin:(rk==='admin')});
+  signIn(rk,acct){ if(!acct) return; const cu={ id:acct.email, name:acct.name, email:acct.email, role:rk, roleLabel:acct.roleLabel, initials:this.initials(acct.name), portal:this.PORTAL[rk], assignedLocations: rk==='admin'?'ALL':this._asLocList(acct.assignedLocations), empId:acct.empId||null, assignedSessions:acct.assignedSessions||[], staffId:acct.staffId||null }; this.setState({...this._userStateReset(), currentUser:cu, role:rk, authStep:'select', loginError:'', loginPw:'', hopAdmin:(rk==='admin')});
     // Workstations are shared, so every session starts in Light. Switching to Dark from the
     // header still holds for the rest of that session (a page refresh keeps it) and is cleared
     // at the next sign-in or sign-out rather than being left for whoever sits down next.
@@ -8223,15 +8278,46 @@ class Component extends DCLogic {
       window.HASCSession.set(session,{ authUserId:session.authUserId, subjectKey:subject?String(subject):null,
         staffId:cu.staffId?String(cu.staffId):null, empId:cu.empId||null, name:cu.name, email:cu.email,
         role:cu.role, roleLabel:cu.roleLabel, assignedLocations:cu.assignedLocations,
-        assignedSessions:cu.assignedSessions||[], linkConfidence:confidence });
-      if(session.authUserId&&subject&&confidence==='strong') window.HASCIdentity.link(session.authUserId,subject);
+        assignedSessions:cu.assignedSessions||[], linkConfidence:confidence,
+        actor:(this.state.hopOrigin&&cu.viewAs)?{name:this.state.hopOrigin.name,email:this.state.hopOrigin.email,role:'admin',subjectKey:this.state.hopOrigin.subjectKey||null}:null });
+      if(session.authUserId&&subject&&confidence==='strong'&&!cu.viewAs) window.HASCIdentity.link(session.authUserId,subject);
     }catch(e){}
   }
   logout(){ try{ if(window.HASCSession) window.HASCSession.clear(); if(window.HASCAuth) window.HASCAuth.signOut(); }catch(e){}
     this.setTheme('light');
-    this.setState({currentUser:null, role:null, authStep:'select', loginRole:null, loginEmail:'', loginPw:'', loginError:'', modal:null, hopAdmin:false}); }
+    if(this.__sdT){ Object.keys(this.__sdT).forEach(k=>clearTimeout(this.__sdT[k])); this.__sdT={}; }
+    try{ const pv=document.getElementById('__audPreview'); if(pv) pv.remove(); }catch(e){}
+    this.setState({...this._userStateReset(), currentUser:null, role:null, authStep:'select', loginRole:null, loginEmail:'', loginPw:'', loginError:'', hopAdmin:false}); }
   // Admin-only quick portal hop (permission: access_all_portals)
-  switchRole(r){ if(!this.can('access_all_portals') && !this.state.hopAdmin) return; let acct=(this.ACCOUNTS[r]||[])[0]; if(r==='manager'){ const D=window.HASC_DATA||{}; const f=(D.managers||[])[0]||(D.areaCoordinators||[])[0]; if(f) acct={email:f.email,name:f.name,roleLabel:'Manager',empId:f.empId,assignedLocations:f.locations||[]}; } if(!acct) return; const cu={ id:acct.email, name:acct.name, email:acct.email, role:r, roleLabel:acct.roleLabel, initials:this.initials(acct.name), portal:this.PORTAL[r], assignedLocations: r==='admin'?'ALL':(acct.assignedLocations||[]), empId:acct.empId||null, assignedSessions:acct.assignedSessions||[], staffId:acct.staffId||null }; this.setState({currentUser:cu, role:r}); this.applyRoleDefaults(r); this._publishSession(cu); }
+  // Admin "view as" portal hop. The admin's own identity is kept in hopOrigin for the whole hop:
+  // returning to Admin restores exactly that person, every audit entry made while hopped names the
+  // admin as the actor (auditEntry), and each hop is itself audited. The previewed account is a
+  // real one so each portal renders with real scope; the header banner says it is a preview.
+  switchRole(r){ if(!this.can('access_all_portals') && !this.state.hopAdmin) return;
+    const cur=this.state.currentUser; const origin=this.state.hopOrigin||((cur&&cur.role==='admin')?cur:null);
+    if(!origin) return;
+    if(r==='admin'){ if(!this.state.hopOrigin) return; const back={...origin}; delete back.subjectKey; delete back.authUserId;
+      this.setState({currentUser:back, role:'admin', hopOrigin:null}); this.applyRoleDefaults('admin'); this._publishSession(back);
+      this.logAudit('Portal hop ended',{prev:cur?(cur.name+' ('+cur.role+')'):'',next:back.name+' (admin)',notes:'Returned to own admin account',sev:'Compliance'}); return; }
+    let acct=(this.ACCOUNTS[r]||[])[0];
+    if(r==='manager'){ const D=window.HASC_DATA||{}; const f=[...(D.managers||[]),...(D.areaCoordinators||[])].find(m=>{ const rec=this.staffById(m.empId); return rec&&this.isEmploymentActive(rec); }); if(f) acct={email:f.email,name:f.name,roleLabel:'Manager',empId:f.empId,assignedLocations:this.directoryLocationsFor(f.empId,f.locations)}; }
+    if(!acct) return;
+    let hopOrigin=this.state.hopOrigin;
+    if(!hopOrigin){ hopOrigin={...origin}; try{ if(window.HASCSession){ hopOrigin.subjectKey=window.HASCSession.subjectKey(); hopOrigin.authUserId=window.HASCSession.authUserId(); } }catch(e){} }
+    const cu={ id:acct.email, name:acct.name, email:acct.email, role:r, roleLabel:acct.roleLabel, initials:this.initials(acct.name), portal:this.PORTAL[r], assignedLocations:this._asLocList(acct.assignedLocations), empId:acct.empId||null, assignedSessions:acct.assignedSessions||[], staffId:acct.staffId||null, viewAs:true };
+    this.setState({currentUser:cu, role:r, hopOrigin}); this.applyRoleDefaults(r); this._publishSession(cu);
+    this.logAudit('Portal hop',{prev:cur?(cur.name+' ('+cur.role+')'):'',next:cu.name+' ('+r+')',notes:'Admin preview of the '+this.PORTAL[r],sev:'Compliance'}); }
+  _asLocList(l){ if(l==='ALL') return 'ALL'; if(Array.isArray(l)) return l.filter(x=>x!=null&&String(x).trim()!==''); return (l!=null&&String(l).trim()!=='')?[l]:[]; }
+  // A manager's assigned locations come from the Location Directory (location.managers /
+  // location.coordinators), so an admin assigning or removing a manager there changes that manager's
+  // scope at their next sign-in. The HASC_DATA list still counts unless the admin removed that
+  // manager from the location (removedManagers/removedCoordinators), so a directory saved before a
+  // new assignment was added to HASC_DATA cannot silently drop it.
+  directoryLocationsFor(empId,fallback){ const locs=this.state.locations||[]; const seed=this._asLocList(fallback||[]); if(!empId||!locs.length||!this.state.locSeeded) return seed; const id=String(empId);
+    const byId={}; locs.forEach(l=>{ byId[l.id]=l; });
+    const dir=locs.filter(l=>!l.mergedInto&&([...(l.managers||[]),...(l.coordinators||[])].map(String).includes(id))).map(l=>l.name);
+    const kept=(seed==='ALL'?[]:seed).filter(n=>{ const c=this.getCanonicalLocation(n), l=c.locId&&byId[c.locId]; return !(l&&[...(l.removedManagers||[]),...(l.removedCoordinators||[])].map(String).includes(id)); });
+    const out=[], seen=new Set(); [...dir,...kept].forEach(n=>{ const k=this.getCanonicalLocation(n).locId||this.normalizeLocationName(n); if(!seen.has(k)){ seen.add(k); out.push(n); } }); return out; }
   PERMISSIONS = {
     admin:['view_all_staff','manage_courses','manage_sessions','approve_certificates','approve_registrations','view_audit_logs','import_staff','manage_users','override_training_records','email_reports','access_all_portals','generate_certificates','generate_transcripts','manage_online_courses','publish_online_courses','assign_online_courses','view_all_online_progress','generate_online_course_certificate','approve_online_course_exception'],
     manager:['view_assigned_staff','view_assigned_locations','request_registrations','view_manager_reports','generate_staff_transcripts','download_staff_certificates','request_certificates','view_assigned_staff_online_progress','request_online_course_help','request_exception_review'],
@@ -8248,7 +8334,7 @@ class Component extends DCLogic {
   canViewStaffMember(staff){
     const cu=this.state.currentUser; if(!cu||!staff) return false;
     if(cu.role==='admin') return true;
-    if(cu.role==='manager') return this.managerAuthorizedRoster(cu).some(r=>String(r.id)===String(staff.id));
+    if(cu.role==='manager') return cu.assignedLocations==='ALL'?true:this._mgrScopeIdSet(cu).has(String(staff.id));
     if(cu.role==='staff') return String(staff.id)===String(cu.staffId);
     if(cu.role==='instructor') return (this.state.sessions||[]).some(se=>this.instructorCanAccessSession(se,cu)&&this.seatedRoster(se).some(x=>String(x.staffId)===String(staff.id)));
     return false;
@@ -8294,7 +8380,7 @@ class Component extends DCLogic {
   printEl(sel, type){ const src=document.querySelector(sel); if(!src){ window.print(); return; } const root=document.createElement('div'); root.id='__printRoot'; root.className='t-'+(type||'doc'); root.appendChild(src.cloneNode(true)); this.openPreparedPrint(root); }
   logoSrc(){ return (window.__resources&&window.__resources.hascLogo)||'assets/hasc-logo.png'; }
   certAuditLine(staffId,code){ const _vk=this.voidKeySet(); const comps=(this.state.docs.completions||[]).filter(x=>!_vk.has(this.completionKey(staffId, (x.complianceCode||x.code||x.course), x.date))); let r=comps.filter(x=>x.staffId===staffId && (x.code===code||x.complianceCode===code||x.course===code||(x.satisfiedRequirements&&x.satisfiedRequirements.includes(code)))).slice(-1)[0]; const st=this.state.roster.find(x=>x.id===staffId); if(!r){ const exC=(this.state.docs.extCerts||[]).filter(x=>x.staffId===staffId&&x.status==='approved'&&((x.satisfiedRequirements&&x.satisfiedRequirements.includes(code))||x.course===code)).slice(-1)[0]; if(exC) r={source:'External certificate (approved)',date:exC.date,expires:exC.expires,certId:exC.id,displayCourseTitle:exC.displayTitle}; } if(!r){ const inD=(this.state.docs.internalDocs||[]).filter(x=>x.staffId===staffId&&x.linkedCode===code).slice(-1)[0]; if(inD) r={source:'Internal certificate upload',date:inD.date,expires:inD.expires,certId:inD.id}; } if(!r){ const d=st&&st.dt&&st.dt[code]; if(!d) return ''; r={source:'Training record',date:d}; } const src=(r.source||'Training record'); const srcL=src.charAt(0).toUpperCase()+src.slice(1); const parts=[]; if(r.version)parts.push('Course Version: v'+(r.version||1)+'.0'); if(r.courseId)parts.push('Course ID: '+r.courseId); parts.push('Completion Source: '+srcL); if(r.date)parts.push('Completion Date: '+r.date); if(r.expires)parts.push((r.expires==='No expiration'?'No expiration':('Expires: '+r.expires))); if(r.sessionId)parts.push('Session ID: '+r.sessionId); if(r.certId)parts.push('Certificate ID: '+r.certId); return parts.join('  |  '); }
-  openVideoCert(videoId,staffId){ const ss=this.SS(); const c=ss.vtLatestCompletionFor?ss.vtLatestCompletionFor(videoId,staffId):ss.vtCompletionFor(videoId,staffId); const v=c?ss.vtVideoById(videoId,c.video_version):ss.vtVideoForStaff(videoId,staffId); if(!c||!c.issue_certificate){this.toast('No certificate is available for this completion.');return;} this.setState({modal:{type:'cert',staffId,code:(v&&v.compliance_code)||('VT_'+videoId),completionId:c.id,videoId,videoVersion:c.video_version}}); }
+  openVideoCert(videoId,staffId){ if(!this.canViewStaffMember(this.staffById(staffId)||{id:staffId})){ this.toast('You do not have permission to access this certificate.'); return; } const ss=this.SS(); const c=ss.vtLatestCompletionFor?ss.vtLatestCompletionFor(videoId,staffId):ss.vtCompletionFor(videoId,staffId); const v=c?ss.vtVideoById(videoId,c.video_version):ss.vtVideoForStaff(videoId,staffId); if(!c||!c.issue_certificate){this.toast('No certificate is available for this completion.');return;} this.setState({modal:{type:'cert',staffId,code:(v&&v.compliance_code)||('VT_'+videoId),completionId:c.id,videoId,videoVersion:c.video_version}}); }
   printCompletionCert(completionId){ const c=(this.state.docs.completions||[]).find(x=>x.id===completionId)||((this.SS().vtCompletions&&this.SS().vtCompletions())||[]).find(x=>x.id===completionId); if(!c){this.toast('Completion not found.');return;} const st=this.staffById((c.staffId||c.staff_id)); if(!st){this.toast('Staff not found.');return;} if(!this.canViewStaffMember(st)){this.toast('You do not have permission to access this certificate.');return;} const code=c.code||c.complianceCode||c.compliance_code||('VT_'+(c.videoId||c.video_id||'')); const date=c.date||new Date(c.officialCompletionAt||c.official_completion_at||c.completed_at).toLocaleDateString('en-US'); this.printHTML(this.certBlockHTML(st,code,date,c),'cert'); }
   printOneCert(id,code,date,completionId){ if(completionId){this.printCompletionCert(completionId);return;} const st=this.staffById(id); if(!st){ this.toast('Staff not found.'); return; } if(!this.canViewStaffMember(st)){this.toast('You do not have permission to access this certificate.');return;} this._mirrorToService('doc.certificate', S=>S.logGeneratedDocument({type:'Certificate',staffId:id,role:(this.state.currentUser&&this.state.currentUser.role)||'admin',portal:'Admin'},'Admin')); const d=date||(st.dt&&st.dt[code]); if(!d){ this.toast('No completion on record for that course.'); return; } this.printHTML(this.certBlockHTML(st,code,d),'cert'); }
   // Certificates-tab single-print path. Unlike printOneCert(), this intentionally falls back
@@ -8342,7 +8428,9 @@ class Component extends DCLogic {
     return base.sort((a,b)=>String(a.name).localeCompare(String(b.name)));
   }
   transcriptBlockHTML(st,includeLegacy=true){ const rows=this.buildTranscript(st).filter(r=>includeLegacy||!r.legacy); const meta=this.dispName(st)+' · '+(st.pos||'')+' · '+(st.loc||'')+' · ID '+st.id+' · Hired '+(st.h||'—'); const head=this.documentHeaderHTML('Official Staff Training Transcript',meta); const trs=rows.map(t=>'<tr><td style="border:1px solid #dde3ef;padding:6px 8px;font-weight:700;color:#152A4D">'+this.esc(this.documentCourseName(t.code,t))+'</td><td style="border:1px solid #dde3ef;padding:6px 8px;color:#475569">'+this.esc(t.classification||'Mandatory')+'</td><td style="border:1px solid #dde3ef;padding:6px 8px;color:#475569">'+this.esc(t.completed)+'</td><td style="border:1px solid #dde3ef;padding:6px 8px;color:#475569">'+this.esc(t.expires)+'</td><td style="border:1px solid #dde3ef;padding:6px 8px"><span style="background:'+t.bg+';color:'+t.fg+';border-radius:999px;padding:2px 8px;font-size:10px;font-weight:900">'+this.esc(t.statusLabel)+'</span></td></tr>').join(''); return '<div style="font-family:-apple-system,Arial,sans-serif;padding:6px 4px 18px">'+head+'<table style="border-collapse:collapse;width:100%;font-size:12px"><thead><tr>'+['Training','Classification','Completed','Due / Expires','Status'].map(h=>'<th style="background:#1F3864;color:#fff;border:1px solid #274879;padding:6px 8px;text-align:left;font-size:10px;text-transform:uppercase">'+h+'</th>').join('')+'</tr></thead><tbody>'+trs+'</tbody></table><div style="font-size:9px;color:#94a3b8;text-align:right;margin-top:7px">'+this.esc(this.documentBranding().presentedBy)+'</div></div>'; }
-  printAllTranscripts(loc,staffIds,includeLegacy=true){ const allowed=this.batchScope(loc); const requested=new Set((Array.isArray(staffIds)?staffIds:[]).filter(Boolean).map(String)); const MAX_TRX=400; const picked=requested.size?allowed.filter(st=>requested.has(String(st.id))):allowed; const list=picked.slice(0,MAX_TRX),trxTruncated=picked.length>MAX_TRX; if(!list.length){ this.toast(requested.size?'None of the selected staff are within your authorized print scope.':'No staff to print for that selection.'); return; } const role=(this.state.currentUser&&this.state.currentUser.role)||'admin'; const selectedBatch=requested.size>0; this._mirrorToService('doc.transcript', S=>S.logGeneratedDocument({type:selectedBatch?'Transcript (selected batch)':'Transcript (batch)',scope:selectedBatch?('selected '+list.length):(loc||'all'),staffIds:selectedBatch?list.map(st=>st.id):undefined,role,portal:role==='manager'?'Manager':'Admin'},role)); const inner=list.map((st)=>'<div class="trx-staff">'+this.transcriptBlockHTML(st,includeLegacy)+'</div>').join(''); this.toast('Preparing '+list.length+' transcript'+(list.length===1?'':'s')+' for print\u2026'+(trxTruncated?(' Stopped at the '+MAX_TRX+'-transcript limit for one print job \u2014 narrow the selection to print the rest.'):'')); this.printHTML(inner,'doc'); }
+  // staffIds: an array is an explicit list (a selection or the current search results) and is printed
+  // exactly, so an empty list prints nothing; omit it (null) to print the whole authorized scope.
+  printAllTranscripts(loc,staffIds,includeLegacy=true){ const explicit=Array.isArray(staffIds); const requested=new Set((explicit?staffIds:[]).filter(Boolean).map(String)); if(explicit&&!requested.size){ this.toast('No staff match the current search or filters \u2014 nothing was printed.'); return; } const allowed=this.batchScope(loc); const MAX_TRX=400; const picked=explicit?allowed.filter(st=>requested.has(String(st.id))):allowed; const list=picked.slice(0,MAX_TRX),trxTruncated=picked.length>MAX_TRX; if(!list.length){ this.toast(requested.size?'None of the selected staff are within your authorized print scope.':'No staff to print for that selection.'); return; } const role=(this.state.currentUser&&this.state.currentUser.role)||'admin'; const selectedBatch=requested.size>0; this._mirrorToService('doc.transcript', S=>S.logGeneratedDocument({type:selectedBatch?'Transcript (selected batch)':'Transcript (batch)',scope:selectedBatch?('selected '+list.length):(loc||'all'),staffIds:selectedBatch?list.map(st=>st.id):undefined,role,portal:role==='manager'?'Manager':'Admin'},role)); const inner=list.map((st)=>'<div class="trx-staff">'+this.transcriptBlockHTML(st,includeLegacy)+'</div>').join(''); this.toast('Preparing '+list.length+' transcript'+(list.length===1?'':'s')+' for print\u2026'+(trxTruncated?(' Stopped at the '+MAX_TRX+'-transcript limit for one print job \u2014 narrow the selection to print the rest.'):'')); this.printHTML(inner,'doc'); }
   // ===== CERTIFICATE DATA =================================================================
   // One resolver for everything a certificate states about a completion, so the on-screen card
   // and the printed page can never disagree about the name, course, date or certificate ID.
@@ -8379,7 +8467,7 @@ class Component extends DCLogic {
   certBlockHTML(st,code,date,completion){ completion=completion||null; const title=this.documentCourseName(code,completion); const who=this.dispName(st); const f=this.certFacts(st,code,date,completion); const b=this.documentBranding(); // Landscape HASC certificate. Sizes are cqw (percent of the card's own width), so the SAME
   // composition renders identically in the on-screen modal and on the printed landscape page.
   return '<div class="hasc-cert-page" style="container-type:inline-size;position:relative;width:100%;aspect-ratio:11/8.5;background:#fff;border:.5cqw solid #00356C;border-radius:.3cqw;overflow:hidden;box-sizing:border-box;font-family:-apple-system,&quot;Segoe UI&quot;,Helvetica,Arial,sans-serif;color:#0B2A5C"> <svg viewBox="0 0 110 85" preserveAspectRatio="none" aria-hidden="true" focusable="false" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none"> <polygon points="3.6,21 21,3.6 28,3.6 3.6,28" fill="#F3F7FB"/> <polygon points="106.4,64 89,82.4 82,82.4 106.4,57" fill="#F3F7FB"/> <polygon points="3.6,3.6 17.6,3.6 3.6,17.6" fill="#24BAD2"/> <polygon points="3.6,10.6 10.6,10.6 3.6,17.6" fill="#0E7C9B"/> <polygon points="18.8,3.6 24.9,3.6 10.5,18 4.4,18" fill="#FFD00E"/> <polygon points="106.4,82.4 92.4,82.4 106.4,68.4" fill="#24BAD2"/> <polygon points="106.4,75.4 99.4,75.4 106.4,68.4" fill="#0E7C9B"/> <polygon points="91.2,82.4 85.1,82.4 99.5,68 105.6,68" fill="#FFD00E"/> </svg> <div style="position:absolute;inset:1.45cqw;border:.28cqw solid #FFD00E;pointer-events:none"></div> <div style="position:absolute;inset:2.4cqw;border:.2cqw solid #24BAD2;pointer-events:none"></div> <div style="position:absolute;width:3.1cqw;height:3.1cqw;border-color:#0B2A5C;border-style:solid;pointer-events:none;top:3.4cqw;left:3.4cqw;border-width:.5cqw 0 0 .5cqw"></div> <div style="position:absolute;width:3.1cqw;height:3.1cqw;border-color:#0B2A5C;border-style:solid;pointer-events:none;top:3.4cqw;right:3.4cqw;border-width:.5cqw .5cqw 0 0"></div> <div style="position:absolute;width:3.1cqw;height:3.1cqw;border-color:#0B2A5C;border-style:solid;pointer-events:none;bottom:3.4cqw;left:3.4cqw;border-width:0 0 .5cqw .5cqw"></div> <div style="position:absolute;width:3.1cqw;height:3.1cqw;border-color:#0B2A5C;border-style:solid;pointer-events:none;bottom:3.4cqw;right:3.4cqw;border-width:0 .5cqw .5cqw 0"></div> <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:24cqw;font-weight:900;letter-spacing:1.1cqw;color:#F4F8FC;pointer-events:none;line-height:1;white-space:nowrap;font-family:-apple-system,&quot;Segoe UI&quot;,Helvetica,Arial,sans-serif">HASC</div> <div data-cf="col" style="position:relative;z-index:1;height:100%;box-sizing:border-box;padding:3.2cqw 6cqw 2.4cqw;display:flex;flex-direction:column;align-items:center;justify-content:space-between;text-align:center"> <div style="flex:0 0 auto;width:100%"> <img src="'+this.esc(b.logo)+'" alt="HASC Center" style="width:31cqw;max-height:10.2cqw;height:auto;object-fit:contain;display:block;margin:0 auto"> <div style="font-size:1.5cqw;font-weight:700;letter-spacing:.36cqw;text-transform:uppercase;color:#0B2A5C;margin-top:1.5cqw">'+this.esc(b.presentedBy)+'</div> <div style="display:flex;align-items:center;justify-content:center;gap:.5cqw;margin-top:1.4cqw"> <span style="flex:0 1 27cqw;height:.22cqw;background:linear-gradient(90deg,rgba(255,208,14,0) 0%,#FFD00E 38%,#24BAD2 100%)"></span> <span style="width:1.5cqw;height:1.5cqw;background:#FFD00E;transform:rotate(45deg);flex:none"></span> <span style="flex:0 1 27cqw;height:.22cqw;background:linear-gradient(90deg,#24BAD2 0%,#FFD00E 62%,rgba(255,208,14,0) 100%)"></span> </div> </div> <div style="flex:0 0 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;width:100%"> <div data-cf="title" data-cf-base="6cqw" style="font-family:Georgia,&quot;Times New Roman&quot;,serif;font-variant:small-caps;font-size:6cqw;font-weight:700;color:#08204A;letter-spacing:.12cqw;line-height:1.06;white-space:nowrap">Certificate of Completion</div> <div style="font-size:1.45cqw;font-weight:600;letter-spacing:.38cqw;text-transform:uppercase;color:#0B2A5C;margin-top:1.1cqw">This certifies that</div> <div data-cf="name" data-cf-base="'+this.certNameSize(who)+'" style="font-family:Georgia,&quot;Times New Roman&quot;,serif;font-style:italic;font-size:'+this.certNameSize(who)+';font-weight:700;color:#0A6A8E;line-height:1.16;max-width:84cqw;white-space:nowrap;margin-top:.45cqw">'+this.esc(who)+'</div> <div style="width:52cqw;height:.14cqw;background:#24BAD2;margin-top:.4cqw"></div> <div style="font-size:1.45cqw;font-weight:600;letter-spacing:.38cqw;text-transform:uppercase;color:#0B2A5C;margin-top:.95cqw">Has successfully completed</div> <div data-cf="course" data-cf-base="'+this.certCourseSize(title)+'" style="font-family:Georgia,&quot;Times New Roman&quot;,serif;font-size:'+this.certCourseSize(title)+';font-weight:700;color:#0A6A8E;line-height:1.18;max-width:86cqw;margin-top:.65cqw">'+this.esc(title)+'</div> <div style="position:relative;margin-top:1.2cqw;border:.16cqw solid #24BAD2;border-radius:1.2cqw;padding:1.6cqw 5.5cqw .8cqw"> <span style="position:absolute;top:-.85cqw;left:50%;transform:translateX(-50%);background:#fff;padding:0 1cqw;font-size:1.1cqw;font-weight:700;letter-spacing:.3cqw;text-transform:uppercase;color:#0B2A5C;white-space:nowrap">Date of Completion</span> <span style="font-family:Georgia,&quot;Times New Roman&quot;,serif;font-size:2.3cqw;font-weight:700;color:#08204A;white-space:nowrap">'+this.esc(f.date)+'</span> </div> </div> <div style="flex:0 0 auto;width:100%;margin-top:1.3cqw"> <div style="display:flex;align-items:center;justify-content:center;gap:1.4cqw;color:#0B2A5C;font-size:1.05cqw;font-weight:700;letter-spacing:.32cqw;text-transform:uppercase"> <span style="flex:0 1 13cqw;height:.12cqw;background:#0B2A5C;opacity:.55"></span><span style="white-space:nowrap">HASC Center LMS</span><span style="flex:0 1 13cqw;height:.12cqw;background:#0B2A5C;opacity:.55"></span> </div> <div style="font-size:1.18cqw;font-weight:800;letter-spacing:.1cqw;text-transform:uppercase;color:#0B2A5C;margin-top:.55cqw">Certificate ID: '+this.esc(f.certId)+'</div> '+(f.meta?('<div style="font-size:.86cqw;color:#8FA0B5;letter-spacing:.02cqw;margin-top:.5cqw">'+this.esc(f.meta)+'</div>'):'')+' <div style="display:flex;justify-content:center;gap:14cqw;margin-top:1.5cqw"> <div style="text-align:center;min-width:27cqw"><div style="font-family:&quot;Campana Script&quot;,&quot;CampanaScript&quot;,&quot;Segoe Script&quot;,&quot;Snell Roundhand&quot;,&quot;Apple Chancery&quot;,&quot;Brush Script MT&quot;,&quot;Lucida Handwriting&quot;,cursive;font-size:3cqw;font-weight:500;line-height:1.05;color:#0B2A5C;padding-bottom:.3cqw">Aryeh Samuelson</div><div style="height:.12cqw;background:#0B2A5C;opacity:.8"></div><div style="font-size:1.14cqw;font-weight:800;letter-spacing:.18cqw;text-transform:uppercase;color:#0B2A5C;margin-top:.55cqw">Aryeh Samuelson</div><div style="font-size:1.02cqw;font-weight:600;letter-spacing:.16cqw;text-transform:uppercase;color:#0B2A5C;margin-top:.15cqw">Director of Staff Training</div><div style="font-size:1.02cqw;font-weight:600;letter-spacing:.16cqw;text-transform:uppercase;color:#0B2A5C;margin-top:.15cqw">HASC Center</div></div> <div style="text-align:center;min-width:27cqw"><div style="font-family:&quot;Campana Script&quot;,&quot;CampanaScript&quot;,&quot;Segoe Script&quot;,&quot;Snell Roundhand&quot;,&quot;Apple Chancery&quot;,&quot;Brush Script MT&quot;,&quot;Lucida Handwriting&quot;,cursive;font-size:3cqw;font-weight:500;line-height:1.05;color:#0B2A5C;padding-bottom:.3cqw">Avi Sacks</div><div style="height:.12cqw;background:#0B2A5C;opacity:.8"></div><div style="font-size:1.14cqw;font-weight:800;letter-spacing:.18cqw;text-transform:uppercase;color:#0B2A5C;margin-top:.55cqw">Avi Sacks</div><div style="font-size:1.02cqw;font-weight:600;letter-spacing:.16cqw;text-transform:uppercase;color:#0B2A5C;margin-top:.15cqw">Chief Operating Officer</div><div style="font-size:1.02cqw;font-weight:600;letter-spacing:.16cqw;text-transform:uppercase;color:#0B2A5C;margin-top:.15cqw">HASC Center</div></div> </div> </div> </div> </div>'; }
-  printAllCerts(loc,staffIds,includeLegacy=true){ const allowed=this.batchScope(loc); const requested=new Set((Array.isArray(staffIds)?staffIds:[]).filter(Boolean).map(String)); const list=requested.size?allowed.filter(st=>requested.has(String(st.id))):allowed; if(!list.length){ this.toast(requested.size?'None of the selected staff are within your authorized print scope.':'No authorized staff to print for that selection.'); return; } const role=(this.state.currentUser&&this.state.currentUser.role)||'admin'; const MAX_CERTS=400; let blocks=[],printedFor=0,truncated=false; for(const st of list){ if(blocks.length>=MAX_CERTS){truncated=true;break;} const rows=this.printableCertificateRows(st,role).filter(r=>includeLegacy||!r.legacy); if(!rows.length) continue; for(const r of rows){ if(blocks.length>=MAX_CERTS){truncated=true;break;} blocks.push(this.certBlockHTML(st,r.code,r.completed,this.completionRecordById(r.completionId))); } printedFor++; } if(!blocks.length){ this.toast('No certificates on record for the selected staff.'); return; } const selectedBatch=requested.size>0; this._mirrorToService('doc.certificate', S=>S.logGeneratedDocument({type:selectedBatch?'Certificate (selected staff batch)':'Certificate (batch)',scope:selectedBatch?('selected '+list.length):(loc||'all'),staffIds:selectedBatch?list.map(st=>st.id):undefined,certificateCount:blocks.length,role,portal:role==='manager'?'Manager':'Admin'},role)); const inner=blocks.map((b,i)=>'<div style="'+(i?'page-break-before:always;':'')+'">'+b+'</div>').join(''); this.toast('Preparing '+blocks.length+' certificate'+(blocks.length===1?'':'s')+' for '+printedFor+' staff member'+(printedFor===1?'':'s')+'\u2026'+(truncated?(' Stopped at the '+MAX_CERTS+'-certificate limit for one print job \u2014 narrow the selection to print the rest.'):'')); this.printHTML(inner,'cert'); }
+  printAllCerts(loc,staffIds,includeLegacy=true){ const explicit=Array.isArray(staffIds); const requested=new Set((explicit?staffIds:[]).filter(Boolean).map(String)); if(explicit&&!requested.size){ this.toast('No staff match the current search or filters \u2014 nothing was printed.'); return; } const allowed=this.batchScope(loc); const list=explicit?allowed.filter(st=>requested.has(String(st.id))):allowed; if(!list.length){ this.toast(requested.size?'None of the selected staff are within your authorized print scope.':'No authorized staff to print for that selection.'); return; } const role=(this.state.currentUser&&this.state.currentUser.role)||'admin'; const MAX_CERTS=400; let blocks=[],printedFor=0,truncated=false; for(const st of list){ if(blocks.length>=MAX_CERTS){truncated=true;break;} const rows=this.printableCertificateRows(st,role).filter(r=>includeLegacy||!r.legacy); if(!rows.length) continue; for(const r of rows){ if(blocks.length>=MAX_CERTS){truncated=true;break;} blocks.push(this.certBlockHTML(st,r.code,r.completed,this.completionRecordById(r.completionId))); } printedFor++; } if(!blocks.length){ this.toast('No certificates on record for the selected staff.'); return; } const selectedBatch=requested.size>0; this._mirrorToService('doc.certificate', S=>S.logGeneratedDocument({type:selectedBatch?'Certificate (selected staff batch)':'Certificate (batch)',scope:selectedBatch?('selected '+list.length):(loc||'all'),staffIds:selectedBatch?list.map(st=>st.id):undefined,certificateCount:blocks.length,role,portal:role==='manager'?'Manager':'Admin'},role)); const inner=blocks.map((b,i)=>'<div style="'+(i?'page-break-before:always;':'')+'">'+b+'</div>').join(''); this.toast('Preparing '+blocks.length+' certificate'+(blocks.length===1?'':'s')+' for '+printedFor+' staff member'+(printedFor===1?'':'s')+'\u2026'+(truncated?(' Stopped at the '+MAX_CERTS+'-certificate limit for one print job \u2014 narrow the selection to print the rest.'):'')); this.printHTML(inner,'cert'); }
   _docsDefaults(){ return {sheets:[],extCerts:[],completions:(window.HASC_COMPLETIONS||[]),archived:(window.HASC_ARCHIVED_IDS||[]),internalDocs:[],importBatches:[],staffChangeHistory:[],reportTemplates:[],scheduledReports:[],reportDispatchLog:[],reportCourseSets:{},completionVoids:[],courseConfig:{},certResolutions:{},notifications:[],certModelV:0}; }
   _normalizeDocs(d){ const base=this._docsDefaults(); d=(d&&typeof d==='object')?d:{}; return {...d,sheets:Array.isArray(d.sheets)?d.sheets:base.sheets,extCerts:Array.isArray(d.extCerts)?d.extCerts:base.extCerts,completions:Array.isArray(d.completions)?d.completions:base.completions,archived:Array.isArray(d.archived)?d.archived:base.archived,internalDocs:Array.isArray(d.internalDocs)?d.internalDocs:base.internalDocs,importBatches:Array.isArray(d.importBatches)?d.importBatches:base.importBatches,staffChangeHistory:Array.isArray(d.staffChangeHistory)?d.staffChangeHistory:base.staffChangeHistory,reportTemplates:Array.isArray(d.reportTemplates)?d.reportTemplates:base.reportTemplates,scheduledReports:Array.isArray(d.scheduledReports)?d.scheduledReports:base.scheduledReports,reportDispatchLog:Array.isArray(d.reportDispatchLog)?d.reportDispatchLog:base.reportDispatchLog,reportCourseSets:(d.reportCourseSets&&typeof d.reportCourseSets==='object'&&!Array.isArray(d.reportCourseSets))?d.reportCourseSets:{},completionVoids:Array.isArray(d.completionVoids)?d.completionVoids:base.completionVoids,courseConfig:(d.courseConfig&&typeof d.courseConfig==='object')?d.courseConfig:{},certResolutions:(d.certResolutions&&typeof d.certResolutions==='object')?d.certResolutions:{},notifications:Array.isArray(d.notifications)?d.notifications:[],certModelV:Number(d.certModelV)||0}; }
   _docsPersistFields(){ return ['sheets','extCerts','archived','internalDocs','importBatches','staffChangeHistory','reportTemplates','scheduledReports','reportDispatchLog','reportCourseSets','completionVoids','courseConfig','certResolutions','notifications']; }
@@ -8602,13 +8690,17 @@ class Component extends DCLogic {
   addLocation(){ if(this.state.role!=='admin'){this.toast('Administrator access is required.');return;} const f=this.state.locForm; const name=(f.name||'').trim(); if(!name){ this.toast('Enter a location name.'); return; } if(this.state.locations.some(l=>l.name.toLowerCase()===name.toLowerCase())){ this.toast('A location with that name already exists.'); return; } const id='loc'+Date.now(); const rec={id,name,program:f.program||'Other',active:true,archived:false,managers:[],coordinators:[],aliases:[],notes:(f.notes||'').trim(),created:this.formatMDY(this.todayDate()),mergedInto:null}; this.setState(s=>({locations:[...s.locations,rec], locForm:{name:'',program:'Residence',notes:''}})); this.logAudit('Location added',{target:name, next:rec.program, notes:'New official LMS location', sev:'Info'}); this.toast('Location added.'); }
   startEditLocation(id){ if(this.state.role!=='admin'){this.toast('Administrator access is required.');return;} const l=this.state.locations.find(x=>x.id===id); if(!l)return; this.setState({locEdit:id, locForm:{name:l.name,program:l.program,notes:l.notes||''}}); }
   cancelEditLocation(){ this.setState({locEdit:null, locForm:{name:'',program:'Residence',notes:''}}); }
-  saveLocationEdit(){ if(this.state.role!=='admin'){this.toast('Administrator access is required.');return;} const id=this.state.locEdit; if(!id)return; const f=this.state.locForm; const name=(f.name||'').trim(); if(!name){ this.toast('Name required.'); return; } if(this.state.locations.some(l=>l.id!==id&&l.name.toLowerCase()===name.toLowerCase())){ this.toast('Another location already uses that name.'); return; } const prev=this.state.locations.find(l=>l.id===id); this.setState(s=>({locations:s.locations.map(l=>l.id===id?{...l,name,program:f.program,notes:(f.notes||'').trim()}:l), locEdit:null, locForm:{name:'',program:'Residence',notes:''}})); this.logAudit('Location edited',{target:name, prev:prev?(prev.name+' · '+prev.program):'', next:name+' · '+f.program, notes:'Name/details updated', sev:'Info'}); this.toast('Location updated.'); }
+  saveLocationEdit(){ if(this.state.role!=='admin'){this.toast('Administrator access is required.');return;} const id=this.state.locEdit; if(!id)return; const f=this.state.locForm; const name=(f.name||'').trim(); if(!name){ this.toast('Name required.'); return; } if(this.state.locations.some(l=>l.id!==id&&l.name.toLowerCase()===name.toLowerCase())){ this.toast('Another location already uses that name.'); return; } const prev=this.state.locations.find(l=>l.id===id);
+    // Keep the old name as an alias: staff records, manager assignments and later Empeon imports that
+    // still carry it must keep resolving to this location (and so stay inside manager scope).
+    const nl=(x)=>this.normalizeLocationName(x); const keepAlias=(l)=>(prev&&nl(prev.name)!==nl(name)&&!(l.aliases||[]).some(a=>nl(a)===nl(prev.name)))?[...(l.aliases||[]),prev.name]:(l.aliases||[]);
+    this.setState(s=>({locations:s.locations.map(l=>l.id===id?{...l,name,aliases:keepAlias(l).filter(a=>nl(a)!==nl(name)),program:f.program,notes:(f.notes||'').trim()}:l), locEdit:null, locForm:{name:'',program:'Residence',notes:''}})); this.logAudit('Location edited',{target:name, prev:prev?(prev.name+' · '+prev.program):'', next:name+' · '+f.program, notes:'Name/details updated', sev:'Info'}); this.toast('Location updated.'); }
   toggleLocationActive(id){ if(this.state.role!=='admin'){this.toast('Administrator access is required.');return;} const l=this.state.locations.find(x=>x.id===id); if(!l)return; const next=!l.active; this.setState(s=>({locations:s.locations.map(x=>x.id===id?{...x,active:next}:x)})); this.logAudit(next?'Location reactivated':'Location deactivated',{target:l.name, prev:l.active?'Active':'Inactive', next:next?'Active':'Inactive', notes:next?'Now shown in new dropdowns':'Hidden from new dropdowns; remains in historical reports', sev:'Compliance'}); this.toast(l.name+(next?' reactivated.':' deactivated (kept for historical reports).')); }
   archiveLocation(id){ if(this.state.role!=='admin'){this.toast('Administrator access is required.');return;} const l=this.state.locations.find(x=>x.id===id); if(!l)return; const cnt=this.locStaffCount(l); if(typeof window!=='undefined'&&window.confirm&&!window.confirm('Archive "'+l.name+'"? It is hidden from new dropdowns but kept for all historical staff records, sessions, certificates, transcripts, reports & audit activity. ('+cnt+' staff currently assigned via Empeon.)')) return; this.setState(s=>({locations:s.locations.map(x=>x.id===id?{...x,archived:true,active:false}:x), locDetail:s.locDetail===id?null:s.locDetail})); this.logAudit('Location archived',{target:l.name, prev:'Active', next:'Archived', notes:'Not deleted — retained for history ('+cnt+' staff; records preserved)', sev:'Compliance'}); this.toast(l.name+' archived (history preserved).'); }
   reactivateLocation(id){ if(this.state.role!=='admin'){this.toast('Administrator access is required.');return;} const l=this.state.locations.find(x=>x.id===id); if(!l)return; this.setState(s=>({locations:s.locations.map(x=>x.id===id?{...x,archived:false,active:true,mergedInto:null}:x)})); this.logAudit('Location reactivated',{target:l.name, prev:'Archived', next:'Active', notes:'Restored to active directory', sev:'Compliance'}); this.toast(l.name+' reactivated.'); }
   mergeLocations(){ if(this.state.role!=='admin'){this.toast('Administrator access is required.');return;} const fromId=this.state.locMergeFrom, toId=this.state.locMergeTo; if(!fromId||!toId||fromId===toId){ this.toast('Pick two different locations to merge.'); return; } const from=this.state.locations.find(l=>l.id===fromId), to=this.state.locations.find(l=>l.id===toId); if(!from||!to)return; if(typeof window!=='undefined'&&window.confirm&&!window.confirm('Merge "'+from.name+'" into "'+to.name+'"? "'+from.name+'" becomes an alias of "'+to.name+'" and is archived. Historical records stay intact; Empeon names that match it resolve to "'+to.name+'".')) return; this.setState(s=>({locations:s.locations.map(l=>{ if(l.id===toId) return {...l, aliases:[...new Set([...(l.aliases||[]), from.name, ...(from.aliases||[])])], managers:[...new Set([...(l.managers||[]),...(from.managers||[])])], coordinators:[...new Set([...(l.coordinators||[]),...(from.coordinators||[])])]}; if(l.id===fromId) return {...l, archived:true, active:false, mergedInto:toId}; return l; }), locMergeFrom:null, locMergeTo:''})); this.logAudit('Locations merged',{target:to.name, prev:from.name, next:to.name, notes:'"'+from.name+'" merged into "'+to.name+'" (kept as alias; history preserved)', sev:'Compliance'}); this.toast('Merged "'+from.name+'" into "'+to.name+'".'); }
-  toggleLocManager(locId, empId){ if(this.state.role!=='admin'){this.toast('Administrator access is required.');return;} const l=this.state.locations.find(x=>x.id===locId); if(!l)return; const has=(l.managers||[]).includes(empId); const D=window.HASC_DATA||{}; const nm=((D.managers||[]).find(m=>m.empId===empId)||{}).name||empId; this.setState(s=>({locations:s.locations.map(x=>x.id===locId?{...x,managers:has?(x.managers||[]).filter(e=>e!==empId):[...(x.managers||[]),empId]}:x)})); this.logAudit(has?'Location manager removed':'Location manager assigned',{target:l.name, next:nm, notes:'Manager scoping uses the official LMS Location Directory', sev:'Info'}); }
-  toggleLocCoord(locId, empId){ if(this.state.role!=='admin'){this.toast('Administrator access is required.');return;} const l=this.state.locations.find(x=>x.id===locId); if(!l)return; const has=(l.coordinators||[]).includes(empId); const D=window.HASC_DATA||{}; const nm=((D.areaCoordinators||[]).find(a=>a.empId===empId)||{}).name||empId; this.setState(s=>({locations:s.locations.map(x=>x.id===locId?{...x,coordinators:has?(x.coordinators||[]).filter(e=>e!==empId):[...(x.coordinators||[]),empId]}:x)})); this.logAudit(has?'Area coordinator removed':'Area coordinator assigned',{target:l.name, next:nm, notes:'Coordinator oversight uses the official LMS Location Directory', sev:'Info'}); }
+  toggleLocManager(locId, empId){ if(this.state.role!=='admin'){this.toast('Administrator access is required.');return;} const l=this.state.locations.find(x=>x.id===locId); if(!l)return; const has=(l.managers||[]).includes(empId); const D=window.HASC_DATA||{}; const nm=((D.managers||[]).find(m=>m.empId===empId)||{}).name||empId; this.setState(s=>({locations:s.locations.map(x=>x.id===locId?{...x,managers:has?(x.managers||[]).filter(e=>e!==empId):[...(x.managers||[]),empId],removedManagers:has?[...new Set([...(x.removedManagers||[]),empId])]:(x.removedManagers||[]).filter(e=>e!==empId)}:x)})); this.logAudit(has?'Location manager removed':'Location manager assigned',{target:l.name, next:nm, notes:'Manager scoping uses the official LMS Location Directory', sev:'Info'}); }
+  toggleLocCoord(locId, empId){ if(this.state.role!=='admin'){this.toast('Administrator access is required.');return;} const l=this.state.locations.find(x=>x.id===locId); if(!l)return; const has=(l.coordinators||[]).includes(empId); const D=window.HASC_DATA||{}; const nm=((D.areaCoordinators||[]).find(a=>a.empId===empId)||{}).name||empId; this.setState(s=>({locations:s.locations.map(x=>x.id===locId?{...x,coordinators:has?(x.coordinators||[]).filter(e=>e!==empId):[...(x.coordinators||[]),empId],removedCoordinators:has?[...new Set([...(x.removedCoordinators||[]),empId])]:(x.removedCoordinators||[]).filter(e=>e!==empId)}:x)})); this.logAudit(has?'Area coordinator removed':'Area coordinator assigned',{target:l.name, next:nm, notes:'Coordinator oversight uses the official LMS Location Directory', sev:'Info'}); }
   // ----- Import Review Queue actions -----
   mapImportToExisting(qid, locId){ if(this.state.role!=='admin'){this.toast('Administrator access is required.');return;} const q=this.state.locImportQueue.find(x=>x.id===qid); const loc=this.state.locations.find(l=>l.id===locId); if(!q||!loc){ this.toast('Pick a location to map to.'); return; } this.setState(s=>({locations:s.locations.map(l=>l.id===locId?{...l, aliases:[...new Set([...(l.aliases||[]), q.rawName])]}:l), locImportQueue:s.locImportQueue.map(x=>x.id===qid?{...x,status:'mapped',mappedTo:loc.name}:x)})); this.logAudit('Import location mapped',{target:loc.name, prev:q.rawName, next:loc.name, notes:'Empeon name "'+q.rawName+'" mapped to existing LMS location', sev:'Info'}); this.toast('Mapped "'+q.rawName+'" → '+loc.name); }
   createLocFromImport(qid){ if(this.state.role!=='admin'){this.toast('Administrator access is required.');return;} const q=this.state.locImportQueue.find(x=>x.id===qid); if(!q)return; if(this.state.locations.some(l=>l.name.toLowerCase()===q.rawName.toLowerCase())){ this.toast('That name already exists — map to it instead.'); return; } const id='loc'+Date.now(); const rec={id,name:q.rawName,program:this.locProgramGuess(q.rawName),active:true,archived:false,managers:[],coordinators:[],aliases:[],notes:'Created from Empeon import review',created:this.formatMDY(this.todayDate()),mergedInto:null}; this.setState(s=>({locations:[...s.locations,rec], locImportQueue:s.locImportQueue.map(x=>x.id===qid?{...x,status:'created',mappedTo:q.rawName}:x)})); this.logAudit('Location added',{target:q.rawName, next:rec.program, notes:'Created as new LMS location from import review', sev:'Info'}); this.toast('Created new location "'+q.rawName+'".'); }
@@ -9171,12 +9263,16 @@ class Component extends DCLogic {
   }
   toggleCourseActive(id){ this.setState(s=>({onlineCourses:s.onlineCourses.map(c=>c.id===id?{...c,active:!c.active}:c)})); }
   // Append-only audit logger (prototype). In production this is a server-side INSERT into audit_logs (no client edit/delete).
-  auditEntry(action, o){ o=o||{}; const cu=this.state.currentUser; const d=new Date(); const ts=(d.getMonth()+1)+'/'+d.getDate()+'/'+String(d.getFullYear()).slice(2)+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); return {ts, user:(cu&&cu.name)||'System', role:(cu&&cu.role)||'system', staff:o.staff||'—', target:o.target||'—', action, prev:o.prev||'', next:o.next||'', notes:o.notes||'', portal:(cu&&cu.role)?(cu.role.charAt(0).toUpperCase()+cu.role.slice(1)):'System', sev:o.sev||'Info', relatedId:o.relatedId||''}; }
+  auditEntry(action, o){ o=o||{}; const cu=this.state.currentUser; const d=new Date(); const ts=(d.getMonth()+1)+'/'+d.getDate()+'/'+String(d.getFullYear()).slice(2)+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); const hop=cu&&this.state.hopOrigin; const e={ts, user:hop?hop.name:((cu&&cu.name)||'System'), role:hop?'admin':((cu&&cu.role)||'system'), staff:o.staff||'—', target:o.target||'—', action, prev:o.prev||'', next:o.next||'', notes:o.notes||'', portal:(cu&&cu.role)?(cu.role.charAt(0).toUpperCase()+cu.role.slice(1)):'System', sev:o.sev||'Info', relatedId:o.relatedId||''};
+    // While an admin is previewing another portal the actor is still the admin; the previewed account is noted.
+    if(hop){ e.actingAs=cu.name+' ('+cu.role+')'; e.notes=(e.notes?e.notes+' · ':'')+'Admin '+hop.name+' viewing as '+e.actingAs; } return e; }
   logAudit(action, o){ const entry=this.auditEntry(action,o);
     try{ if(window.HASCSession&&window.HASCSession.isAuthenticated()){
       entry.actorAuthUserId=window.HASCSession.authUserId();
       entry.actorStaffId=window.HASCSession.subjectKey();
-      entry.actorRole=window.HASCSession.role(); } }catch(e){} this.setState(s=>({auditLog:[entry, ...(s.auditLog||[])]})); }
+      entry.actorRole=window.HASCSession.role(); } }catch(e){}
+    const hop=this.state.currentUser&&this.state.hopOrigin; if(hop){ entry.actorRole='admin'; entry.actorName=hop.name; if(hop.subjectKey) entry.actorStaffId=hop.subjectKey; if(hop.authUserId) entry.actorAuthUserId=hop.authUserId; }
+    this.setState(s=>({auditLog:[entry, ...(s.auditLog||[])]})); }
   logAuditBatch(rows){ const entries=(rows||[]).map(r=>this.auditEntry(r.action,r)).reverse(); if(entries.length)this.setState(s=>({auditLog:[...entries,...(s.auditLog||[])]})); }
   /* ===================================================================
      SESSION REMINDER & CANCELLATION ENGINE
@@ -10181,7 +10277,7 @@ class Component extends DCLogic {
   }
   exportData(){ const blob=new Blob([JSON.stringify(this.state.docs,null,2)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='hasc-lms-records.json'; document.body.appendChild(a); a.click(); a.remove(); this.toast('Records exported.'); }
   async importData(e){ const f=e.target.files&&e.target.files[0]; if(!f)return; try{ const txt=await f.text(); const d=JSON.parse(txt); const docs={...this.state.docs, sheets:d.sheets||[],extCerts:d.extCerts||[],completions:d.completions||window.HASC_COMPLETIONS||[],archived:d.archived||window.HASC_ARCHIVED_IDS||[],internalDocs:d.internalDocs||[],importBatches:d.importBatches||[],staffChangeHistory:d.staffChangeHistory||this.state.docs.staffChangeHistory||[],reportTemplates:d.reportTemplates||this.state.docs.reportTemplates||[],scheduledReports:d.scheduledReports||this.state.docs.scheduledReports||[],reportDispatchLog:d.reportDispatchLog||this.state.docs.reportDispatchLog||[],reportCourseSets:d.reportCourseSets||this.state.docs.reportCourseSets||{},completionVoids:d.completionVoids||this.state.docs.completionVoids||[],courseConfig:d.courseConfig||this.state.docs.courseConfig||{},certResolutions:d.certResolutions||this.state.docs.certResolutions||{},certModelV:d.certModelV||this.state.docs.certModelV||0}; this.saveDocs(docs); this.setState({backupMsg:'Imported '+(docs.sheets.length+docs.extCerts.length+docs.completions.length)+' records.'}); this.toast('Records imported.'); }catch(err){ this.setState({backupMsg:'Could not read that file.'}); } }
-  importCsvStaff(){ const lines=(this.state.csvText||'').trim().split('\n').filter(x=>x.trim()); const cols=['O1','O2','O3','EPP','ART','PA','CPR','FA','SCIP1','SCIP2','SCIPR','DYS','DIAB','DIABP','AMAP','AMAPP','CB','CBP','TF','TFP','DD','WCO','WCI','SDCH1','SDCH2','RNORI','RNPLAN','PONS']; const news=[]; const have=new Set(this.state.roster.map(r=>r.id)); lines.forEach(line=>{ const p=line.split(';').map(x=>x.trim()); if(p.length<2)return; const id=p[0],name=p[1]; if(!id||!name||have.has(id))return; have.add(id); const rec={}; cols.forEach(c=>rec[c]='w'); news.push({id,name,pos:p[2]||'',loc:p[3]||'',h:p[4]||'',mgrId:'',rec,dt:{}}); }); if(news.length){ let docs=this.state.docs; news.forEach(r=>{ docs=this.logStaffChange({staffId:r.id, name:r.name, pos:r.pos||'', loc:r.loc||'', h:r.h||'', mgrId:r.mgrId||'', action:'Created', source:'Manual action', notes:'Created by admin (pasted rows)'}, docs); }); this.saveDocs(docs); news.forEach(r=>this.logAudit('Staff added (manual)',{staff:r.name||r.id, next:'active', notes:'Pasted staff row', sev:'Info', relatedId:r.id})); this.setState(s=>({roster:[...s.roster,...news], csvText:'', recMsg:news.length+' staff added to the roster.'})); this.toast(news.length+' staff added.'); } else { this.setState({recMsg:'No new staff added \u2014 check the format or duplicate IDs.'}); } }
+  importCsvStaff(){ if(!this.can('import_staff')){ this.toast('Administrator access is required to import staff.'); return; } const lines=(this.state.csvText||'').trim().split('\n').filter(x=>x.trim()); const cols=['O1','O2','O3','EPP','ART','PA','CPR','FA','SCIP1','SCIP2','SCIPR','DYS','DIAB','DIABP','AMAP','AMAPP','CB','CBP','TF','TFP','DD','WCO','WCI','SDCH1','SDCH2','RNORI','RNPLAN','PONS']; const news=[]; const have=new Set(this.state.roster.map(r=>r.id)); lines.forEach(line=>{ const p=line.split(';').map(x=>x.trim()); if(p.length<2)return; const id=p[0],name=p[1]; if(!id||!name||have.has(id))return; have.add(id); const rec={}; cols.forEach(c=>rec[c]='w'); news.push({id,name,pos:p[2]||'',loc:p[3]||'',h:p[4]||'',mgrId:'',rec,dt:{}}); }); if(news.length){ let docs=this.state.docs; news.forEach(r=>{ docs=this.logStaffChange({staffId:r.id, name:r.name, pos:r.pos||'', loc:r.loc||'', h:r.h||'', mgrId:r.mgrId||'', action:'Created', source:'Manual action', notes:'Created by admin (pasted rows)'}, docs); }); this.saveDocs(docs); news.forEach(r=>this.logAudit('Staff added (manual)',{staff:r.name||r.id, next:'active', notes:'Pasted staff row', sev:'Info', relatedId:r.id})); this.setState(s=>({roster:[...s.roster,...news], csvText:'', recMsg:news.length+' staff added to the roster.'})); this.toast(news.length+' staff added.'); } else { this.setState({recMsg:'No new staff added \u2014 check the format or duplicate IDs.'}); } }
   saveDocs(docs){ const prev=this.state.docs; docs=this._normalizeDocs(docs); this.setState({docs}); const p=this._persistDocsNow(docs,true,prev); p.then(ok=>{if(ok){this.__docsUserWarned=false;return;}if(!this.__docsUserWarned){this.__docsUserWarned=true;this.toast('Storage warning: this change is active now but may not survive a reload. Check browser site-storage permissions.');}}); return p; }
   /* ===================== COURSE COMPLETION MANAGEMENT (admin-only void/recalc) =====================
      A "completion record" is synthesized from two sources of truth:
@@ -11030,7 +11126,7 @@ class Component extends DCLogic {
     if(role==='admin') return [...new Set((this.state.locations||[]).filter(l=>l&&!l.archived&&!l.mergedInto).map(l=>l.name))].sort((a,b)=>a.localeCompare(b));
     if(role!=='manager'||!cu) return [];
     const set=new Set(); this.managerAuthorizedRoster(cu).forEach(r=>{ const n=this.canonicalLocName(r)||r.loc; if(n) set.add(n); });
-    if(Array.isArray(cu.assignedLocations)) cu.assignedLocations.forEach(n=>n&&set.add(n));
+    const _al=this._asLocList(cu.assignedLocations); if(Array.isArray(_al)) _al.forEach(n=>n&&set.add(n));
     return [...set].sort((a,b)=>a.localeCompare(b));
   }
   // Staff a user may see for a location. Managers draw only from their authorized roster, so the
@@ -11127,7 +11223,7 @@ class Component extends DCLogic {
     });
     const now=new Date();
     return {id:'ap'+now.getTime(), at:now.toISOString(), atLabel:now.toLocaleString('en-US',{dateStyle:'medium',timeStyle:'short'}),
-      by:cu.name||'', role, loc:sel.loc||'', requests:reqs.map(r=>r.label), employees};
+      by:((this.state.hopOrigin||cu).name)||'', byKey:this._audOwnerKey(), role, loc:sel.loc||'', requests:reqs.map(r=>r.label), employees};
   }
   // ---- print pieces ----
   _audBadge(status){ const m={found:['\u2713','Record found','#1F9D55','#E4F6EB'],nodoc:['\u26a0','Completion on file \u2014 no certificate','#8A5A00','#FFF4E5'],
@@ -11217,13 +11313,21 @@ class Component extends DCLogic {
   _audMarkPrinted(){ const pkt=this.state.audPacket; if(!pkt) return; const now=new Date().toLocaleString('en-US',{dateStyle:'medium',timeStyle:'short'});
     const hist=((this.state.docs&&this.state.docs.auditPacketHistory)||[]).map(h=>h.id===pkt.id?{...h,printedAt:now}:h);
     this.saveDocs({...this.state.docs,auditPacketHistory:hist}); }
-  audPrintPacket(){ const pkt=this.state.audPacket; if(!pkt) return;
+  // Owner of generated packets: the real person, so an admin's own packet survives a portal hop.
+  _audOwnerKey(){ const cu=this.state.hopOrigin||this.state.currentUser; return cu?String(cu.email||cu.id||cu.name||''):''; }
+  // The packet as the CURRENT user may see it: only their own packet, and only staff they can view
+  // now. Every render, preview and print goes through this, never through state.audPacket directly.
+  _audScopedPacket(){ const pkt=this.state.audPacket; if(!pkt||!this.state.currentUser) return null;
+    const owner=this.state.hopOrigin||this.state.currentUser; if(pkt.byKey?pkt.byKey!==this._audOwnerKey():pkt.by!==(owner.name||'')) return null;
+    const employees=(pkt.employees||[]).filter(e=>this.canViewStaffMember(this.staffById(e.id)));
+    return employees.length===(pkt.employees||[]).length?pkt:{...pkt,employees}; }
+  audPrintPacket(){ const pkt=this._audScopedPacket(); if(!pkt||!pkt.employees.length) return;
     if(!pkt.employees.some(e=>e.docs.some(d=>d.include))){ this.toast('Every document is unticked \u2014 tick at least one to print.'); return; }
     this._audMarkPrinted(); this.logAudit('Audit packet printed',{target:pkt.loc,next:pkt.employees.length+' staff',sev:'Info',relatedId:pkt.id});
     this.printHTML(this.audPacketHTML(pkt),'auditpkt'); }
-  audPrintOne(empId,key){ const pkt=this.state.audPacket; if(!pkt) return; this.printHTML(this.audPacketHTML(pkt,{only:{empId,key}}),'auditpkt'); }
+  audPrintOne(empId,key){ const pkt=this._audScopedPacket(); if(!pkt||!pkt.employees.some(e=>e.id===empId)) return; this.printHTML(this.audPacketHTML(pkt,{only:{empId,key}}),'auditpkt'); }
   audPreviewDoc(empId,key){
-    const pkt=this.state.audPacket; if(!pkt) return;
+    const pkt=this._audScopedPacket(); if(!pkt||!pkt.employees.some(e=>e.id===empId)) return;
     const html=this.audPacketHTML(pkt,{only:{empId,key}});
     const old=document.getElementById('__audPreview'); if(old) old.remove();
     const ov=document.createElement('div'); ov.id='__audPreview'; ov.setAttribute('role','dialog'); ov.setAttribute('aria-label','Document preview');
@@ -11284,8 +11388,10 @@ class Component extends DCLogic {
       return pkt.employees.map(e=>{ const c=k=>e.items.filter(i=>i.status===k).length;
         return {name:e.name,found:c('found'),nodoc:c('nodoc'),missing:c('missing'),expired:c('expired'),docs:e.docs.length,
           line:e.docs.length+' document'+(e.docs.length===1?'':'s')+' ready'+(c('missing')?(' \u00b7 \u2715 '+c('missing')+' not found'):'')+(c('expired')?(' \u00b7 \u231b '+c('expired')+' expired'):'')+(c('nodoc')?(' \u00b7 \u26a0 '+c('nodoc')+' no certificate'):'')}; }); });
-    const pkt=S.audPacket;
-    const hist=((S.docs&&S.docs.auditPacketHistory)||[]).filter(h=>role==='admin'||allowed.includes(h.loc)).slice(0,60);
+    const pkt=this._audScopedPacket();
+    // Managers see a history entry only for the staff in their own scope (MGR-14); entries with none left are hidden.
+    const _hs=role==='admin'?null:(id)=>this.canViewStaffMember(this.staffById(id));
+    const hist=((S.docs&&S.docs.auditPacketHistory)||[]).filter(h=>role==='admin'||allowed.includes(h.loc)).map(h=>_hs?{...h,staff:(h.staff||[]).filter(x=>_hs(x.id))}:h).filter(h=>!_hs||h.staff.length).slice(0,60);
     return {
       audTab:true, audIsAdmin:role==='admin', audIsManager:role==='manager',
       audLocOpts:[{v:'',label:allowed.length?'Choose the location being audited\u2026':'No authorized locations'}].concat(allowed.map(l=>({v:l,label:l}))).map(o=>({...o,selected:o.v===sel.loc})),
@@ -11651,7 +11757,7 @@ class Component extends DCLogic {
   importSupervisorFallbackForLocation(rawHome,rawLogin,map){
     const key=this.importSupervisorLocationKey(rawHome,rawLogin),hit=map&&map.byKey&&map.byKey.get(key);return hit?{...hit,locationKey:key}:null;
   }
-  async importEmpeon(e,opts){ opts=opts||{};
+  async importEmpeon(e,opts){ if(!this.can('import_staff')){ this.toast('Administrator access is required to import staff.'); return; } opts=opts||{};
     const f=e.target.files&&e.target.files[0]; if(!f)return; let text; try{text=await f.text();}catch(err){this.setState({empeonMsg:'Could not read that file.',impFormat:'unknown'});return;}
     const manualOverrides=opts.manualOverrides||{};
     this.setState({pendingImport:null,importSummary:null,empeonMsg:(opts.reanalyze?'Revalidating manual fixes for ':'Reading and analyzing ')+f.name+'…',impFormat:'',importSourceText:text,importSourceName:f.name,importManualOverrides:manualOverrides,importFixDirty:false,importFixMsg:opts.reanalyze?'Manual fixes revalidated.':''}); await new Promise(r=>setTimeout(r,0));
@@ -11789,7 +11895,7 @@ class Component extends DCLogic {
     const finalReq=new Set(['denied','completed','removed','voided','withdrawnInactive','withdrawn']);const nextRequests=(requests||[]).map(r=>{if(!set.has(String(r.staffId))||finalReq.has(r.status))return r;requestsWithdrawn++;return {...r,status:'withdrawnInactive',withdrawnAt:nowISO,withdrawReason:'Staff archived/inactivated by roster import'};});
     const active=new Set(['pending','queued','processing']);const nextQueue=(queue||[]).map(j=>{const st=String(j.status||'').toLowerCase();if(!active.has(st))return j;const direct=j.recipientKind==='staff'&&set.has(String(j.staffId)),managerReminder=j.type==='session_reminder'&&j.recipientKind==='manager'&&affectedSessions.has(String(j.sessionId));if(direct||managerReminder){remindersCancelled++;return {...j,status:'cancelled',statusReason:direct?'staff_inactive':'roster_changed_after_staff_inactivation',nextRetryAt:null};}return j;});
     return {sessions:nextSessions,requests:nextRequests,notifQueue:nextQueue,rosterRemoved,requestsWithdrawn,remindersCancelled,affectedSessionIds:[...affectedSessions]}; }
-  async applyImport(){const p=this.state.pendingImport;if(!p)return;if(this.state.importFixDirty){this.toast('Revalidate the manual fixes before applying the import.');return;}if(!(p.applyCount>0)){this.toast('There are no valid changes to apply. Resolve the blocked rows and import again.');return;}
+  async applyImport(){if(!this.can('import_staff')){ this.toast('Administrator access is required to import staff.'); return; }const p=this.state.pendingImport;if(!p)return;if(this.state.importFixDirty){this.toast('Revalidate the manual fixes before applying the import.');return;}if(!(p.applyCount>0)){this.toast('There are no valid changes to apply. Resolve the blocked rows and import again.');return;}
     if(p.archiveIds.length){if(!window.confirm('This import will archive '+p.archiveIds.length+' staff member(s). Historical completions, certificates, transcripts, and audits will be preserved. Continue?'))return;}
     if(p.archiveMissingApplied>0){if(!window.confirm('FULL ROSTER CONFIRMATION\n\n'+p.archiveMissingApplied+' active staff are absent from this verified file and will be archived. File coverage: '+Math.round((p.fullRosterCoverage||0)*100)+'%.\n\nConfirm that this is a complete agency roster.'))return;if(p.archiveHighRisk&&!window.confirm('HIGH-IMPACT SECOND CONFIRMATION\n\nThis will archive '+p.archiveMissingApplied+' staff ('+p.archiveImpactPct+'% of the active roster). This cannot be treated as a department-only or filtered export. Proceed?'))return;}
     const t=this.importNow(),actor=(this.state.currentUser&&this.state.currentUser.name)||'Admin',cur=new Set(this.state.docs.archived||[]);p.archiveIds.forEach(id=>cur.add(id));p.reactivateIds.forEach(id=>cur.delete(id));p.addArchived.forEach(r=>cur.add(r.id));
@@ -11923,6 +12029,7 @@ class Component extends DCLogic {
     try{
       if(!window.HASCAuthLayer) return;
       window.HASCPolicy.registerMatrix(this.PERMISSIONS);
+      if(window.HASCPolicy.registerScopeResolver) window.HASCPolicy.registerScopeResolver((p,st)=>this._mgrScopeIdSet(p).has(String(st.id)));
       this._authUnsub=window.HASCAuth.onAuthStateChange((evt)=>{
         if(evt==='SIGNED_OUT' && this.state.currentUser) this.logout();
       });
@@ -12940,12 +13047,16 @@ class Component extends DCLogic {
     if(!title){this.setState({vtUpdMsg:'Enter a short title for this training update.'});return;}
     if(f.kind==='note'&&!body){this.setState({vtUpdMsg:'Enter the information staff need to review.'});return;}
     if(f.kind==='slide'&&!f.asset_data_url&&!/^https:\/\/.+/i.test(url)){this.setState({vtUpdMsg:'Upload a PDF/image or paste an https slide URL.'});return;}
+    // The asset is shown to staff in an image or iframe, so only web links and uploaded images/PDFs are accepted (never javascript:, data:text/html, etc.).
+    if(url&&!this.safeAssetSrc(url)){this.setState({vtUpdMsg:'The asset link must start with http:// or https://.'});return;}
+    if(f.asset_data_url&&!this.safeAssetSrc(f.asset_data_url)){this.setState({vtUpdMsg:'Uploaded files must be an image or a PDF.'});return;}
     const res=ss.vtPublishContentUpdate(v.id,{...f,title,body,asset_url:url,due_date:f.due_date||null},'Admin');
     if(!res||!res.ok){this.setState({vtUpdMsg:'The update could not be published.'});return;}
     this.logAudit('Training update published',{target:v.title,next:title,notes:(f.kind==='slide'?'Slide':'Note')+' acknowledgement · '+res.assigned+' current learner(s) assigned · prior video completion remains valid',sev:'Compliance',relatedId:res.id});
     this.toast('Training update published to '+res.assigned+' current learner'+(res.assigned===1?'':'s')+'. Future course assignments will inherit it automatically.');
     this.setState({vtUpdId:null,vtUpdForm:null,vtUpdMsg:'',storeVer:(this.state.storeVer||0)+1});
   }
+  safeAssetSrc(u){ const x=String(u||'').trim(); return (/^https?:\/\/[^\s]+$/i.test(x)||/^data:(image\/[a-z0-9.+-]+|application\/pdf)[;,]/i.test(x))?x:''; }
   vtOpenUpdate(id){ this.setState({vtUpdViewId:id}); }
   vtCloseUpdate(){ this.setState({vtUpdViewId:null}); }
   vtAcknowledgeUpdate(id,staffId,staffName){
@@ -13711,7 +13822,7 @@ class Component extends DCLogic {
   vtCourseFromVideo(v,staffId,updatesOnly){ if(!v) return null; const ss=this.SS(); const finals=(v.questions||[]).filter(q=> typeof q.at!=='number'); const dur=(v.duration_seconds? this.vtFmtTs(v.duration_seconds):'');
     const assigned=(staffId&&ss&&ss.vtUpdateAssignmentsForStaff)?ss.vtUpdateAssignmentsForStaff(staffId):[];
     const updates=assigned.map(a=>{ const u=ss.vtContentUpdateById?ss.vtContentUpdateById(a.update_id):null; if(!u||u.video_id!==v.id)return null; const ack=ss.vtUpdateAcknowledgement?ss.vtUpdateAcknowledgement(u.id,staffId):null; return {a,u,ack}; }).filter(Boolean).sort((x,y)=>String(x.u.published_at||'').localeCompare(String(y.u.published_at||'')));
-    const toMod=x=>({ type:'update', title:x.u.title||'Training update', updateId:x.u.id, kind:x.u.kind||'note', body:x.u.body||'', assetSrc:x.u.asset_data_url||x.u.asset_url||'', assetType:x.u.asset_type||'', publishedAt:x.u.published_at||'', dueDate:x.a.due_date||x.u.due_date||null });
+    const toMod=x=>({ type:'update', title:x.u.title||'Training update', updateId:x.u.id, kind:x.u.kind||'note', body:x.u.body||'', assetSrc:this.safeAssetSrc(x.u.asset_data_url||x.u.asset_url||''), assetType:x.u.asset_type||'', publishedAt:x.u.published_at||'', dueDate:x.a.due_date||x.u.due_date||null });
     if(updatesOnly){ const pending=updates.filter(x=>!x.ack).map(toMod); return { id:'vtu:'+v.id, code:(v.compliance_code||''), title:v.title+' — Required Update', passing:(v.passing_score||80), certEnabled:false, vtVideoId:v.id, updateOnly:true, modules:pending }; }
     const mods=[{ type:'video', title:v.title, dur, watchPct:(v.min_watch_pct||95), preventSkip:!!v.block_seek, vtVideoId:v.id }];
     updates.forEach(x=>mods.push(toMod(x)));
@@ -13861,7 +13972,7 @@ class Component extends DCLogic {
     const openUpdate=this.state.vtUpdViewId?ss.vtContentUpdateById(this.state.vtUpdViewId):null;
     const openAck=openUpdate?ss.vtUpdateAcknowledgement(openUpdate.id,sid):null;
     const out={ sVtHas:rows.length>0, sVtRows:rows, sVtUpdateHas:false, sVtUpdateRows:[], sVtUpdateOpen:false, su:{}, sVtPlaying:false, vp:{} };
-    if(openUpdate){ const vv=ss.vtVideoById(openUpdate.video_id); const src=openUpdate.asset_data_url||openUpdate.asset_url||''; const isImg=/^data:image\//i.test(src)||/^https?:\/\/.*\.(png|jpe?g|gif|webp)(\?|#|$)/i.test(src)||/^image\//i.test(openUpdate.asset_type||'');
+    if(openUpdate){ const vv=ss.vtVideoById(openUpdate.video_id); const src=this.safeAssetSrc(openUpdate.asset_data_url||openUpdate.asset_url||''); const isImg=/^data:image\//i.test(src)||/^https?:\/\/.*\.(png|jpe?g|gif|webp)(\?|#|$)/i.test(src)||/^image\//i.test(openUpdate.asset_type||'');
       out.su={title:openUpdate.title,course:vv?vv.title:openUpdate.video_id,kind:openUpdate.kind==='slide'?'Slide / PDF update':'Written update',body:openUpdate.body||'',hasBody:!!openUpdate.body,hasAsset:!!src,isImage:isImg,isFrame:!!src&&!isImg,src:src,
         published:'Published '+new Date(openUpdate.published_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}),ack:!!openAck,canAck:!openAck,
         ackBg:openAck?'#E4F6EB':'#FFF8E6',ackBorder:openAck?'#B9E5C8':'#F2D99C',ackFg:openAck?'#1F6F43':'#6b5317',
@@ -14213,6 +14324,7 @@ class Component extends DCLogic {
   
   openCert(code){ this.setState({modal:{type:'cert',code}}); }
   openCertFor(staffId,code,completionId,date){
+    if(!this.canViewStaffMember(this.staffById(staffId)||{id:staffId})){ this.toast('You do not have permission to access this certificate.'); return; }
     const comps=((this.state.docs&&this.state.docs.completions)||[]), sid=String(staffId), wanted=String(code||'').toUpperCase();
     let cm=completionId?comps.find(x=>String(x.id!=null?x.id:(x.completionId!=null?x.completionId:x.completion_id))===String(completionId)):null;
     if(!cm){
@@ -15598,7 +15710,7 @@ class Component extends DCLogic {
     const loginDescMap={admin:'Full system access — staff, sessions, session requests, reports & settings.', manager:'Your assigned locations — team compliance, registrations & reports.', instructor:'Your assigned sessions — rosters, attendance & completions.', staff:'Your certificates, transcript & upcoming registered sessions.'};
     // header scope line
     let assignedLocLine='';
-    if(cu){ if(cu.role==='admin') assignedLocLine='All locations'; else if(cu.role==='manager') assignedLocLine=(managerLocs.length?('Locations: '+managerLocs.join(', ')):'No staff in your caseload'); else if(cu.role==='instructor') assignedLocLine=(this.state.sessions||[]).filter(s=>this.instructorCanAccessSession(s,cu)).length+' assigned session(s)'; else if(cu.role==='staff'){ const st=this.staffById(cu.staffId); assignedLocLine=st?st.loc:''; } }
+    if(cu){ if(cu.role==='admin') assignedLocLine='All locations'; else if(cu.role==='manager') assignedLocLine=this.managerScopeLine(cu,scopedRoster); else if(cu.role==='instructor') assignedLocLine=(this.state.sessions||[]).filter(s=>this.instructorCanAccessSession(s,cu)).length+' assigned session(s)'; else if(cu.role==='staff'){ const st=this.staffById(cu.staffId); assignedLocLine=st?st.loc:''; } }
 
     // Which group's tabs are on screen: the one holding the current tab, unless the user clicked
     // another group to look through it. That browse choice is tied to the tab it was made against,
@@ -15746,7 +15858,8 @@ class Component extends DCLogic {
         bar: r.status==='denied'?'#D93025':(r.status==='enrolled'?'#1F9D55':'#E0B500'),
         statusLabel:_stLabel,statusBg:_stBg,statusFg:_stFg,
         actionable: r.status==='pendingMgr' && !_obsolete,
-        onForward:()=>this.forwardReq(r.id), onDeny:()=>this.denyReq(r.id),
+        // Deny is an admin decision (denyReq); managers forward or leave the request, so they get no dead button.
+        onForward:()=>this.forwardReq(r.id), onDeny:()=>this.denyReq(r.id), canDeny:this.state.role==='admin',
         onApprove:()=>this.approveReq(r.id)};
     };
     const _scopeIds = new Set(_mgrReqTab?scopedRoster.map(r=>r.id):[]);
@@ -16083,7 +16196,9 @@ class Component extends DCLogic {
     let player=null,showPlayer=false,showCert=false,cert=null;
     
     if(this.state.modal&&this.state.modal.type==='cert'){ showCert=true; const md=this.state.modal;
-      if(md.staffId){ const st=this.state.roster.find(x=>x.id===md.staffId)||{name:md.staffId,dt:{}}; const nm=st.name.includes(',')?st.name.split(',').map(x=>x.trim()).reverse().join(' '):st.name; const cm=md.completionId?((this.state.docs.completions||[]).find(x=>x.id===md.completionId)||((this.SS().vtCompletions&&this.SS().vtCompletions())||[]).find(x=>x.id===md.completionId)):null; const completed=cm?(cm.date||new Date(cm.officialCompletionAt||cm.official_completion_at||cm.completed_at).toLocaleDateString('en-US')):(md.completionDate||((st.dt&&st.dt[md.code])||'\u2014')); cert={staffName:nm,name:this.documentCourseName(md.code,cm),completed,code:md.code,staffId:st.id,completionRec:cm,auditLine:cm?['Course Classification: '+(cm.classification||'Professional Development'),'Completion Source: '+(cm.source||cm.completion_origin||'LMS'),(cm.certId||cm.certificate_id)?('Certificate ID: '+(cm.certId||cm.certificate_id)):''].filter(Boolean).join(' | '):this.certAuditLine(st.id,md.code)}; }
+      // The certificate card is a view of a staff record, so it gets the same guard as printing it.
+      if(md.staffId&&!this.canViewStaffMember(this.staffById(md.staffId)||{id:md.staffId})){ showCert=false; cert=null; }
+      else if(md.staffId){ const st=this.state.roster.find(x=>x.id===md.staffId)||{name:md.staffId,dt:{}}; const nm=st.name.includes(',')?st.name.split(',').map(x=>x.trim()).reverse().join(' '):st.name; const cm=md.completionId?((this.state.docs.completions||[]).find(x=>x.id===md.completionId)||((this.SS().vtCompletions&&this.SS().vtCompletions())||[]).find(x=>x.id===md.completionId)):null; const completed=cm?(cm.date||new Date(cm.officialCompletionAt||cm.official_completion_at||cm.completed_at).toLocaleDateString('en-US')):(md.completionDate||((st.dt&&st.dt[md.code])||'\u2014')); cert={staffName:nm,name:this.documentCourseName(md.code,cm),completed,code:md.code,staffId:st.id,completionRec:cm,auditLine:cm?['Course Classification: '+(cm.classification||'Professional Development'),'Completion Source: '+(cm.source||cm.completion_origin||'LMS'),(cm.certId||cm.certificate_id)?('Certificate ID: '+(cm.certId||cm.certificate_id)):''].filter(Boolean).join(' | '):this.certAuditLine(st.id,md.code)}; }
       else { const st=_meStaff; if(st){ const nm=st.name.includes(',')?st.name.split(',').map(x=>x.trim()).reverse().join(' '):st.name; cert={staffName:nm,name:this.documentCourseName(md.code),completed:(st.dt&&st.dt[md.code])||'\u2014',code:md.code,staffId:st.id,completionRec:null,auditLine:this.certAuditLine(st.id,md.code)}; } else { showCert=false; cert=null; } } }
       // The on-screen card resolves its facts and type scale through the same helpers the
       // printed certificate uses, so the two can never show a different date or certificate ID.
@@ -16366,7 +16481,8 @@ class Component extends DCLogic {
         onPwN1:(e)=>this.setState({pwNew1:e.target.value}), onPwN2:(e)=>this.setState({pwNew2:e.target.value}),
         onSavePw:()=>this.savePwSetup(), loginError:this.state.loginError, hasLoginError:!!this.state.loginError,
       showInstrPicker:this.state.loginRole==='instructor', instrPick:this.state.loginEmail, instrLoginOpts:(this.state.instructors||[]).filter(i=>i.status==='active').map(i=>({email:(i.email||this.deriveEmail(i.fullName)), name:i.fullName})).concat((this.ACCOUNTS.instructor||[]).map(a=>({email:a.email,name:a.name}))).filter((o,idx,arr)=>o.email&&arr.findIndex(x=>x.email===o.email)===idx).sort((a,b)=>a.name.localeCompare(b.name)), onInstrPick:(e)=>this.setState({loginEmail:e.target.value,loginError:''}), onLoginEmail:(e)=>this.setState({loginEmail:e.target.value,loginError:''}), onLoginPw:(e)=>this.setState({loginPw:e.target.value,loginError:''}), onDoLogin:()=>this.doLogin(), onBack:()=>this.backToSelect(),
-      roleBadge: role?(role.charAt(0).toUpperCase()+role.slice(1)):'', assignedLocLine, showSwitcher:this.can('access_all_portals')||!!this.state.hopAdmin, onLogout:()=>this.logout(),
+      roleBadge: role?(((this.state.hopOrigin&&cu&&cu.viewAs)?'Viewing as ':'')+role.charAt(0).toUpperCase()+role.slice(1)):'', assignedLocLine, showSwitcher:this.can('access_all_portals')||!!this.state.hopAdmin, onLogout:()=>this.logout(),
+      hopActive:!!(this.state.hopOrigin&&cu&&cu.viewAs), hopBanner:(this.state.hopOrigin&&cu&&cu.viewAs)?('Admin preview: '+this.state.hopOrigin.name+' is viewing the '+(this.PORTAL[cu.role]||cu.role)+' as '+cu.name+'. Anything you do here is recorded under '+this.state.hopOrigin.name+'.'):'', onHopReturn:()=>this.switchRole('admin'),
       hdr:P.hdr, btn:P.btn, solid:P.solid, theme:_theme, themeOpts, thStyle, tdStyle, crHeadStyle, kpiCard, kpiLbl,
       rolePicker, roleSwitch, portalName:u.portal, userName:u.name, userRole:u.role, userInitials:u.ini, nav,
       navGroups, navGroupsShow:navGroups.length>0,
@@ -16463,7 +16579,7 @@ class Component extends DCLogic {
       recList:(()=>{ if(!(role==='admin'&&tab==='records')) return []; const arch=new Set(this.state.docs.archived||[]); let list=this.state.roster.filter(r=>r.loc&&r.loc.trim()||arch.has(r.id)); const fil=this.state.recFilter; if(fil==='active') list=list.filter(r=>!arch.has(r.id)); else if(fil==='archived') list=list.filter(r=>arch.has(r.id)); list=this._filterStaff(list,this.state.admSearch,'full'); return list.slice(0,60).map(r=>({name:r.name,pos:r.pos,loc:r.loc,id:r.id,archived:arch.has(r.id)})); })(),
       recActiveCount:(role==='admin'&&tab==='records')?this.getActiveStaff().length.toLocaleString():'0', recArchivedCount:(role==='admin'&&tab==='records')?(this.state.docs.archived||[]).length.toLocaleString():'0',
       schRows, schFilters, schEmpty, schHasRows:!schEmpty, schCount:schCounts.all,
-      mTeamLine:`Reporting to ${u.name} · ${mTeamSize} staff`, mTeamSize, mRed, mDueSoon, mPct,
+      mTeamLine:(isMgrUser&&this.managerScopeSplit(cu,scopedRoster).chain>0)?`${u.name} · ${mTeamSize} staff (assigned locations + reporting line)`:`${u.name} · ${mTeamSize} staff (assigned locations)`, mTeamSize, mRed, mDueSoon, mPct,
       mPendingReqs, mHasPending:mPendingReqs.length>0, mNoPending:mPendingReqs.length===0, mAllReqs, mHasReqs:mAllReqs.length>0, mNoReqs:mAllReqs.length===0 && mPortalReqs.length===0, goMRequests:()=>this.go('requests'),
       mPortalReqs, mHasPortalReqs:mPortalReqs.length>0,
       locOptions, mLoc:this.state.mLoc, mSearch:this._sd('mSearch'), onMgrLoc:(e)=>this.setState({mLoc:e.target.value}), onMgrSearch:(e)=>this._searchInput('mSearch',e.target.value), mTeamCountLabel, repShow:String(this.state.repShow), onRepShow:(e)=>this.setState({repShow:+e.target.value}), onMgrColorReportExportWorkbook:()=>this.exportManagerComplianceWorkbook(), pickShow:String(this.state.pickShow), onPickShow:(e)=>{this._resetVirtualList('adm-staff-scroll');this._resetVirtualList('rn-staff-scroll');this.setState({pickShow:+e.target.value,admWindowStart:0,rnWindowStart:0});},
