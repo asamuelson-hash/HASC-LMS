@@ -8029,7 +8029,7 @@ class Component extends DCLogic {
   formatISODate(d){ d=(d instanceof Date)?d:this.parseMDY(d); if(!d||isNaN(d)) return ''; return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
   formatShortDate(d){ d=(d instanceof Date)?d:this.parseMDY(d); if(!d||isNaN(d)) return ''; return d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}); }
   addDays(d,n){ d=(d instanceof Date)?new Date(d):this.parseMDY(d); if(!d||isNaN(d)) return null; d.setDate(d.getDate()+(+n||0)); return d; }
-  addYearsDate(d,n){ d=(d instanceof Date)?new Date(d):this.parseMDY(d); if(!d||isNaN(d)) return null; d.setFullYear(d.getFullYear()+(+n||0)); return d; }
+  addYearsDate(d,n){ d=(d instanceof Date)?new Date(d):this.parseMDY(d); if(!d||isNaN(d)) return null; n=+n||0; if(n>0&&Number.isInteger(n)) return this.addIntervalDate(d,n*365); d.setFullYear(d.getFullYear()+n); return d; }
   daysUntil(d){ d=(d instanceof Date)?d:this.parseMDY(d); if(!d||isNaN(d)) return null; const t=this.todayDate(); t.setHours(0,0,0,0); const x=new Date(d); x.setHours(0,0,0,0); return Math.round((x-t)/86400000); }
 
   /* ART INITIAL-DUE RULE -----------------------------------------------------
@@ -8058,7 +8058,11 @@ class Component extends DCLogic {
   effectiveAssignmentDue(staff,videoOrCode,storedDue){ const code=typeof videoOrCode==='string'?videoOrCode:((videoOrCode&&videoOrCode.compliance_code)||''); if(code!=='ART') return storedDue||null; const override=staff&&staff.expOverride&&staff.expOverride.ART; if(override){ const d=this.parseMDY(override); return d?this.formatISODate(d):(storedDue||null); } const completed=staff&&staff.dt&&staff.dt.ART; if(completed){ const renewal=this.addYearsDate(this.parseMDY(completed),1); return renewal?this.formatISODate(renewal):(storedDue||null); } const x=this.artInitialDueInfo(staff); return x.ready?x.dueISO:null; }
   // TODAY_MDY is now derived from the live browser date (was a hardcoded [6,18,2026]).
   get TODAY_MDY(){ const t=this.todayDate(); return [t.getMonth()+1, t.getDate(), t.getFullYear()]; }
-  statusFromDate(mdy,days){ const p=String(mdy).split('/'); if(p.length<3) return null; const _yy=+p[2]; const comp=new Date(this._yr(_yy), +p[0]-1, +p[1]); if(isNaN(comp)) return null; const exp=new Date(comp); exp.setDate(exp.getDate()+days); const t=new Date(this.TODAY_MDY[2],this.TODAY_MDY[0]-1,this.TODAY_MDY[1]); const left=Math.round((exp-t)/86400000); if(left<0) return 'r'; if(left<=30) return 'o'; if(left<=90) return 'y'; return 'g'; }
+  // One expiry rule for status AND every displayed date: whole-year intervals (365/730/1095...)
+  // add calendar years (2/29 -> 2/28), anything else adds days. Two-digit years go through _yr.
+  _expiryBase(mdy){ if(mdy instanceof Date) return isNaN(mdy)?null:new Date(mdy); const d=this.parseMDY(mdy); if(d) return new Date(d); const p=String(mdy||'').split('/'); if(p.length<3) return null; const x=new Date(this._yr(+p[2]), +p[0]-1, +p[1]); return isNaN(x)?null:x; }
+  addIntervalDate(mdy,days){ const d=this._expiryBase(mdy); if(!d) return null; days=+days||0; if(days>0&&days%365===0){ const y=d.getFullYear()+days/365, m=d.getMonth(), last=new Date(y,m+1,0).getDate(); return new Date(y,m,Math.min(d.getDate(),last)); } d.setDate(d.getDate()+days); return d; }
+  statusFromDate(mdy,days){ const comp=this._expiryBase(mdy); if(!comp) return null; const exp=this.addIntervalDate(comp,days); if(!exp) return null; const t=new Date(this.TODAY_MDY[2],this.TODAY_MDY[0]-1,this.TODAY_MDY[1]); const left=Math.round((exp-t)/86400000); if(left<0) return 'r'; if(left<=30) return 'o'; if(left<=90) return 'y'; return 'g'; }
   GRACE_COURSES=['SDCH1','SDCH2','O1','O2','O3','FA','PA','CPR'];
   daysSinceHire(staff){ const h=staff&&staff.h; if(!h) return null; const p=String(h).split('/'); if(p.length<3) return null; let y=+p[2]; if(isNaN(y)) return null; y=this._yr(y); const hd=new Date(y,(+p[0])-1,+p[1]); if(isNaN(hd)) return null; const t=new Date(this.TODAY_MDY[2],this.TODAY_MDY[0]-1,this.TODAY_MDY[1]); return Math.round((t-hd)/86400000); }
   effStatus(staff,code){ this.__effCalls=(this.__effCalls||0)+1; if(!this.requiredFor(staff,code)){ const _sdch=this.isSDCH(staff); const _isO=(code==='O1'||code==='O2'||code==='O3');
@@ -8343,7 +8347,20 @@ class Component extends DCLogic {
   // Canonical instructor session access — single source of truth (assignedSessions OR instructor-name match).
   instructorCanAccessSession(session, user){ const cu=user||this.state.currentUser; if(!cu||!session) return false; if(cu.role==='admin') return true; if(cu.role!=='instructor') return false; const _rec=(this.state.instructors||[]).find(i=>(i.fullName||'').toLowerCase()===(cu.name||'').toLowerCase()); if(_rec&&_rec.status==='inactive') return false; if((cu.assignedSessions||[]).includes(session.id)) return true; const names=(session.instructor||'').split(',').map(x=>x.trim().toLowerCase()).filter(Boolean); return names.includes((cu.name||'').toLowerCase()); }
   // Shared expiration resolver — single source of truth for staff portal, transcript, reports.
-  expirationFor(staff, code, completionDate, record){ if((!completionDate||completionDate==='\u2014')&&code==='ART'){ const x=this.artInitialDueInfo(staff); return x.ready?x.dueMDY:'\u2014'; } if(!completionDate||completionDate==='\u2014') return '\u2014'; if(record&&record.expires) return record.expires; const ovr=staff&&staff.expOverride&&staff.expOverride[code]; if(ovr) return ovr; const NOEXP=['O1','O2','O3','PA','DYS','SDCH1','SDCH2','AMAP','EPP','RNORI','RNPLAN','PONS','DIAB','CB','TF']; const ciConfigured=this.courseInfoRenewalDays(code); if(ciConfigured===undefined&&NOEXP.includes(code)) return 'No expiration'; const days=this.catalogIntervalDays(code); if(!days) return 'No expiration'; const p=String(completionDate).split('/'); if(p.length<3) return '\u2014'; let y=+p[2]; if(y<100)y=2000+y; const d2=new Date(y,+p[0]-1,+p[1]); if(isNaN(d2)) return '\u2014'; if(days%365===0){ d2.setFullYear(d2.getFullYear()+days/365); } else { d2.setDate(d2.getDate()+days); } return (d2.getMonth()+1)+'/'+d2.getDate()+'/'+String(d2.getFullYear()).slice(2); }
+  expirationFor(staff, code, completionDate, record){ if((!completionDate||completionDate==='\u2014')&&code==='ART'){ const x=this.artInitialDueInfo(staff); return x.ready?x.dueMDY:'\u2014'; } if(!completionDate||completionDate==='\u2014') return '\u2014'; code=String(code||'').toUpperCase();
+    // A row's own explicit expiry wins; the staff-level override belongs only to the completion
+    // currently driving compliance, so it must not leak onto older history rows.
+    if(record){ const e=this.completionExplicitExpiry(record); if(e) return e; }
+    const ovr=staff&&staff.expOverride&&staff.expOverride[code], cur=staff&&staff.dt&&staff.dt[code];
+    if(ovr&&(!cur||this.compDateVal(cur)===this.compDateVal(completionDate))) return ovr;
+    return this.expiryDateFor(staff,code,completionDate); }
+  // Built-in one-time courses. Only consulted when an admin has not configured a renewal rule.
+  ONE_TIME_CODES=['O1','O2','O3','PA','DYS','SDCH1','SDCH2','AMAP','AMAP811','AMAP1','AMAP2','SCIP1','SCIP2','EPP','RNORI','RNPLAN','PONS','DIAB','CB','TF'];
+  isOneTime(code){ code=String(code||'').toUpperCase(); const ci=this.courseInfoRenewalDays(code); if(ci!==undefined) return ci===null; return this.ONE_TIME_CODES.includes(code); }
+  // Interval behind every displayed expiration. Same precedence as effInterval (which drives
+  // status): location override > Course Information > built-in one-time list > catalog default.
+  expiryIntervalDays(staff,code){ code=String(code||'').toUpperCase(); const ov=staff?this.locOverrideFor(staff,code):null; if(ov&&(ov.oneTime||ov.intervalDays)) return this.effInterval(staff,code); if(this.isOneTime(code)) return null; return staff?this.effInterval(staff,code):this.catalogIntervalDays(code); }
+  expiryDateFor(staff,code,date){ const days=this.expiryIntervalDays(staff,code); if(!days) return 'No expiration'; const d=this.addIntervalDate(date,days); return d?this.formatMDY(d):'\u2014'; }
   // Legacy SCIP session-code normalization — maps old/ambiguous session codes to current compliance codes.
   normalizeTrainingCode(code, title){ const c=String(code||'').toUpperCase(); const t=String(title||'').toLowerCase(); if(c==='SCIP'){ if(/day\s*1/.test(t)) return 'SCIP1'; if(/day\s*2/.test(t)) return 'SCIP2'; return 'SCIPR'; } if(c==='SCIPRECERT'||c==='SCIP_RECERT'||c==='SCIP-RECERT') return 'SCIPR'; if(c==='SCIPFULL'||c==='SCIP_FULL') return 'SCIP2'; return code; }
   // Manager session permissions are SPLIT into two distinct concepts (spec #4):
@@ -8379,19 +8396,60 @@ class Component extends DCLogic {
   openPreparedPrint(root){ if(this._printCleanup) this._printCleanup(); const old=document.getElementById('__printRoot'); if(old)old.remove(); const oldBar=document.getElementById('__printToolbar'); if(oldBar)oldBar.remove(); document.body.appendChild(root); const mobile=this.isMobilePrintContext(); if(mobile){ const bar=this.buildMobilePrintToolbar(); document.body.insertBefore(bar,root); document.body.classList.add('hasc-mobile-print-preview'); const close=bar.querySelector('.pt-close'), print=bar.querySelector('.pt-print'); this._printCleanup=()=>this.clearPrintArtifacts(); if(close)close.onclick=()=>this.clearPrintArtifacts(); if(print){print.disabled=true;print.textContent='Preparing…';} this.waitForPrintAssets(root).then(()=>{ try{ this._fitCertificates(root); }catch(e){} if(print&&document.body.contains(print)){print.disabled=false;print.textContent='Print / Save PDF';print.onclick=()=>this.runPreparedPrint(true);} }); try{window.scrollTo(0,0);}catch(e){} return; } let doneRan=false,mql=null,timer=null; const done=()=>{if(doneRan)return;doneRan=true;document.body.classList.remove('print-only');const r=document.getElementById('__printRoot');if(r)r.remove();window.removeEventListener('afterprint',done);if(mql&&mql.removeEventListener){try{mql.removeEventListener('change',onMql);}catch(e){}}if(timer)clearTimeout(timer);this._printCleanup=null;}; const onMql=e=>{if(!e.matches)setTimeout(done,250);}; this._printCleanup=done; window.addEventListener('afterprint',done); try{mql=window.matchMedia('print');if(mql.addEventListener)mql.addEventListener('change',onMql);}catch(e){} timer=setTimeout(done,120000); document.body.classList.add('print-only'); this.waitForPrintAssets(root).then(()=>{ try{ this._fitCertificates(root); }catch(e){} }).then(()=>requestAnimationFrame(()=>requestAnimationFrame(()=>{try{window.print();}catch(e){done();this.toast('Your browser could not open the print sheet.');}}))); }
   printEl(sel, type){ const src=document.querySelector(sel); if(!src){ window.print(); return; } const root=document.createElement('div'); root.id='__printRoot'; root.className='t-'+(type||'doc'); root.appendChild(src.cloneNode(true)); this.openPreparedPrint(root); }
   logoSrc(){ return (window.__resources&&window.__resources.hascLogo)||'assets/hasc-logo.png'; }
-  certAuditLine(staffId,code){ const _vk=this.voidKeySet(); const comps=(this.state.docs.completions||[]).filter(x=>!_vk.has(this.completionKey(staffId, (x.complianceCode||x.code||x.course), x.date))); let r=comps.filter(x=>x.staffId===staffId && (x.code===code||x.complianceCode===code||x.course===code||(x.satisfiedRequirements&&x.satisfiedRequirements.includes(code)))).slice(-1)[0]; const st=this.state.roster.find(x=>x.id===staffId); if(!r){ const exC=(this.state.docs.extCerts||[]).filter(x=>x.staffId===staffId&&x.status==='approved'&&((x.satisfiedRequirements&&x.satisfiedRequirements.includes(code))||x.course===code)).slice(-1)[0]; if(exC) r={source:'External certificate (approved)',date:exC.date,expires:exC.expires,certId:exC.id,displayCourseTitle:exC.displayTitle}; } if(!r){ const inD=(this.state.docs.internalDocs||[]).filter(x=>x.staffId===staffId&&x.linkedCode===code).slice(-1)[0]; if(inD) r={source:'Internal certificate upload',date:inD.date,expires:inD.expires,certId:inD.id}; } if(!r){ const d=st&&st.dt&&st.dt[code]; if(!d) return ''; r={source:'Training record',date:d}; } const src=(r.source||'Training record'); const srcL=src.charAt(0).toUpperCase()+src.slice(1); const parts=[]; if(r.version)parts.push('Course Version: v'+(r.version||1)+'.0'); if(r.courseId)parts.push('Course ID: '+r.courseId); parts.push('Completion Source: '+srcL); if(r.date)parts.push('Completion Date: '+r.date); if(r.expires)parts.push((r.expires==='No expiration'?'No expiration':('Expires: '+r.expires))); if(r.sessionId)parts.push('Session ID: '+r.sessionId); if(r.certId)parts.push('Certificate ID: '+r.certId); return parts.join('  |  '); }
+  certAuditLine(staffId,code){ const _vi=this.voidIndex(); const comps=(this.state.docs.completions||[]).filter(x=>!this.isCompletionVoided(x,_vi)); let r=comps.filter(x=>x.staffId===staffId && (x.code===code||x.complianceCode===code||x.course===code||(x.satisfiedRequirements&&x.satisfiedRequirements.includes(code)))).slice(-1)[0]; const st=this.state.roster.find(x=>x.id===staffId); if(!r){ const exC=(this.state.docs.extCerts||[]).filter(x=>x.staffId===staffId&&x.status==='approved'&&((x.satisfiedRequirements&&x.satisfiedRequirements.includes(code))||x.course===code)).slice(-1)[0]; if(exC) r={source:'External certificate (approved)',date:exC.date,expires:exC.expires,certId:exC.id,displayCourseTitle:exC.displayTitle}; } if(!r){ const inD=(this.state.docs.internalDocs||[]).filter(x=>x.staffId===staffId&&x.linkedCode===code).slice(-1)[0]; if(inD) r={source:'Internal certificate upload',date:inD.date,expires:inD.expires,certId:inD.id}; } if(!r){ const d=st&&st.dt&&st.dt[code]; if(!d) return ''; r={source:'Training record',date:d}; } const src=(r.source||'Training record'); const srcL=src.charAt(0).toUpperCase()+src.slice(1); const parts=[]; if(r.version)parts.push('Course Version: v'+(r.version||1)+'.0'); if(r.courseId)parts.push('Course ID: '+r.courseId); parts.push('Completion Source: '+srcL); if(r.date)parts.push('Completion Date: '+r.date); if(r.expires)parts.push((r.expires==='No expiration'?'No expiration':('Expires: '+r.expires))); if(r.sessionId)parts.push('Session ID: '+r.sessionId); if(r.certId)parts.push('Certificate ID: '+r.certId); return parts.join('  |  '); }
   openVideoCert(videoId,staffId){ if(!this.canViewStaffMember(this.staffById(staffId)||{id:staffId})){ this.toast('You do not have permission to access this certificate.'); return; } const ss=this.SS(); const c=ss.vtLatestCompletionFor?ss.vtLatestCompletionFor(videoId,staffId):ss.vtCompletionFor(videoId,staffId); const v=c?ss.vtVideoById(videoId,c.video_version):ss.vtVideoForStaff(videoId,staffId); if(!c||!c.issue_certificate){this.toast('No certificate is available for this completion.');return;} this.setState({modal:{type:'cert',staffId,code:(v&&v.compliance_code)||('VT_'+videoId),completionId:c.id,videoId,videoVersion:c.video_version}}); }
-  printCompletionCert(completionId){ const c=(this.state.docs.completions||[]).find(x=>x.id===completionId)||((this.SS().vtCompletions&&this.SS().vtCompletions())||[]).find(x=>x.id===completionId); if(!c){this.toast('Completion not found.');return;} const st=this.staffById((c.staffId||c.staff_id)); if(!st){this.toast('Staff not found.');return;} if(!this.canViewStaffMember(st)){this.toast('You do not have permission to access this certificate.');return;} const code=c.code||c.complianceCode||c.compliance_code||('VT_'+(c.videoId||c.video_id||'')); const date=c.date||new Date(c.officialCompletionAt||c.official_completion_at||c.completed_at).toLocaleDateString('en-US'); this.printHTML(this.certBlockHTML(st,code,date,c),'cert'); }
-  printOneCert(id,code,date,completionId){ if(completionId){this.printCompletionCert(completionId);return;} const st=this.staffById(id); if(!st){ this.toast('Staff not found.'); return; } if(!this.canViewStaffMember(st)){this.toast('You do not have permission to access this certificate.');return;} this._mirrorToService('doc.certificate', S=>S.logGeneratedDocument({type:'Certificate',staffId:id,role:(this.state.currentUser&&this.state.currentUser.role)||'admin',portal:'Admin'},'Admin')); const d=date||(st.dt&&st.dt[code]); if(!d){ this.toast('No completion on record for that course.'); return; } this.printHTML(this.certBlockHTML(st,code,d),'cert'); }
+  printCompletionCert(completionId){ const c=(this.state.docs.completions||[]).find(x=>x.id===completionId)||((this.SS().vtCompletions&&this.SS().vtCompletions())||[]).find(x=>x.id===completionId); if(!c){this.toast('Completion not found.');return;} const st=this.staffById((c.staffId||c.staff_id)); if(!st){this.toast('Staff not found.');return;} if(!this.canViewStaffMember(st)){this.toast('You do not have permission to access this certificate.');return;} const code=c.code||c.complianceCode||c.compliance_code||('VT_'+(c.videoId||c.video_id||'')); const date=c.date||new Date(c.officialCompletionAt||c.official_completion_at||c.completed_at).toLocaleDateString('en-US'); const why=this.certificateBlockReason(st,code,date,c); if(why){this.toast(why);return;} this.printHTML(this.certBlockHTML(st,code,date,c),'cert'); }
+  printOneCert(id,code,date,completionId){ if(completionId){this.printCompletionCert(completionId);return;} const st=this.staffById(id); if(!st){ this.toast('Staff not found.'); return; } if(!this.canViewStaffMember(st)){this.toast('You do not have permission to access this certificate.');return;} this._mirrorToService('doc.certificate', S=>S.logGeneratedDocument({type:'Certificate',staffId:id,role:(this.state.currentUser&&this.state.currentUser.role)||'admin',portal:'Admin'},'Admin')); const d=date||(st.dt&&st.dt[code]); if(!d){ this.toast('No completion on record for that course.'); return; } const cm=this.resolveCompletion(id,code,d); const why=this.certificateBlockReason(st,code,d,cm); if(why){this.toast(why);return;} this.printHTML(this.certBlockHTML(st,code,d,cm),'cert'); }
   // Certificates-tab single-print path. Unlike printOneCert(), this intentionally falls back
   // to the normalized transcript row when a historical/imported completion has a synthetic
   // completion ID that is not present in docs.completions. That keeps every certificate card
   // individually printable while preserving the exact completion date shown on the card.
-  printCertificateRow(id,code,date,completionId){ const st=this.staffById(id); if(!st){ this.toast('Staff not found.'); return; } if(!this.canViewStaffMember(st)){this.toast('You do not have permission to access this certificate.');return;} const completion=this.completionRecordById(completionId); const d=date||(completion&&completion.date)||(st.dt&&st.dt[code]); if(!d||d==='—'){ this.toast('No completion on record for that course.'); return; } const role=(this.state.currentUser&&this.state.currentUser.role)||'admin'; this._mirrorToService('doc.certificate', S=>S.logGeneratedDocument({type:'Certificate',staffId:id,role,portal:role,courseCode:code,completionId:completionId||null},role)); this.printHTML(this.certBlockHTML(st,code,d,completion),'cert'); }
+  printCertificateRow(id,code,date,completionId){ const st=this.staffById(id); if(!st){ this.toast('Staff not found.'); return; } if(!this.canViewStaffMember(st)){this.toast('You do not have permission to access this certificate.');return;} let completion=this.completionRecordById(completionId); const d=date||(completion&&completion.date)||(st.dt&&st.dt[code]); if(!d||d==='—'){ this.toast('No completion on record for that course.'); return; } completion=completion||this.resolveCompletion(id,code,d); const why=this.certificateBlockReason(st,code,d,completion); if(why){this.toast(why);return;} const role=(this.state.currentUser&&this.state.currentUser.role)||'admin'; this._mirrorToService('doc.certificate', S=>S.logGeneratedDocument({type:'Certificate',staffId:id,role,portal:role,courseCode:code,completionId:completionId||null},role)); this.printHTML(this.certBlockHTML(st,code,d,completion),'cert'); }
   completionRecordById(id){
     if(!id)return null; const key=String(id);
     const pick=x=>x&&String(x.id!=null?x.id:(x.completionId!=null?x.completionId:x.completion_id))===key;
     return ((this.state.docs&&this.state.docs.completions)||[]).find(pick)||((this.SS()&&this.SS().vtCompletions&&this.SS().vtCompletions())||[]).find(pick)||null;
+  }
+  // Every completion record for one staff member: docs completions plus shared-store video
+  // completions that are not mirrored into docs.
+  completionsForStaff(staffId){ const sid=String(staffId); const docComps=(this.state.docs&&this.state.docs.completions)||[];
+    const idx=this._memo('compsByStaff',[docComps],()=>{ const m=new Map(),ids=new Set(); docComps.forEach(c=>{ const s=this.completionStaffId(c); if(!m.has(s)) m.set(s,[]); m.get(s).push(c); const id=this.completionIdValue(c); if(id!=null) ids.add(String(id)); }); return {m,ids}; });
+    const ss=this.SS(),shared=((ss&&ss.vtCompletions&&ss.vtCompletions())||[]).filter(c=>this.completionStaffId(c)===sid&&!idx.ids.has(String(this.completionIdValue(c))));
+    return (idx.m.get(sid)||[]).concat(shared); }
+  // The completion a certificate/transcript row stands for: the exact record id when known, else
+  // the newest non-voided record for that staff + course + date. Never "last added for the course".
+  resolveCompletion(staffId,code,date,completionId){
+    if(completionId!=null&&completionId!==''){ const c=this.completionRecordById(completionId); if(c) return c; }
+    if(!date||date==='\u2014') return null; const k=String(code||'').toUpperCase(),dv=this.compDateVal(date); if(!dv) return null; const vi=this.voidIndex();
+    const list=this.completionsForStaff(staffId).filter(c=>c.referenceSuperseded!==true&&(this.completionMatchesCode(c,k)||this.completionCode(c)===k)&&this.compDateVal(this.completionDate(c))===dv);
+    return list.filter(c=>!c.voided&&!this.isCompletionVoided(c,vi)).slice(-1)[0]||list.slice(-1)[0]||null; }
+  // One certificate number per completion. A number stored on the record (or issued through a
+  // Missing/Error resolution) is kept as issued. Otherwise the long-standing HASC-<id>-<code>-<digits>
+  // number is kept, except that it drops the date separators (1/12/26 and 11/2/26 both give 11226):
+  // the first completion to hold a number keeps it and a later colliding one gets the full date.
+  certIdFor(st,code,date,completion){
+    const c=completion||null, stored=c&&(c.certId||c.certificate_id); if(stored) return String(stored);
+    if(!st||!date||date==='\u2014') return '';
+    code=String(code||'').toUpperCase(); const sid=String(st.id);
+    const reso=((this.state.docs&&this.state.docs.certResolutions)||{})[this.completionKey(sid,code,date)]; if(reso&&reso.certId) return String(reso.certId);
+    const legacy=this.compCertId(st,code,date), dv=this.compDateVal(date); if(!dv) return legacy;
+    const recs=this.completionsForStaff(sid).filter(x=>x.referenceSuperseded!==true&&(this.completionMatchesCode(x,code)||this.completionCode(x)===code));
+    const order=v=>{ const i=recs.findIndex(x=>this.compDateVal(this.completionDate(x))===v); return i<0?-1:i; };
+    const dates=new Map(); [st.dt&&st.dt[code],st.baseDt&&st.baseDt[code]].concat(recs.map(x=>this.completionDate(x))).forEach(d=>{ const v=this.compDateVal(d); if(v&&v!==dv&&!dates.has(v)&&this.compCertId(st,code,d)===legacy) dates.set(v,d); });
+    if(!dates.size) return legacy;
+    const mine=order(dv); const firstHolder=[...dates.keys()].every(v=>{ const o=order(v); return mine<o||(mine===o&&dv<v); });
+    return firstHolder?legacy:('HASC-'+sid+'-'+code+'-'+this.formatISODate(this._expiryBase(date)).replace(/-/g,''));
+  }
+  // Single gate for every print/open path: the completion must exist and not be voided/withheld.
+  certificateBlockReason(st,code,date,completion){
+    if(!st) return 'Staff not found.'; if(!date||date==='\u2014') return 'No completion on record for that course.';
+    const c=completion||null;
+    if(c&&(c.voided===true||this.isCompletionVoided(c))) return 'This completion has been voided; its certificate is no longer valid.';
+    if(!c&&this.isCompVoided(st.id,String(code||'').toUpperCase(),date)) return 'This completion has been voided; its certificate is no longer valid.';
+    const status=c&&this.completionIdValue(c)!=null?this.certStatusForCompletion(this.completionIdValue(c)):null;
+    if(status==='voided') return 'This completion has been voided; its certificate is no longer valid.';
+    if(status==='missing') return 'This certificate is flagged Missing/Error and must be resolved before printing.';
+    return '';
   }
   printableCertificateRows(st,role){
     return this.buildTranscript(st).filter(r=>{
@@ -8445,18 +8503,15 @@ class Component extends DCLogic {
     return M[mo-1]+' '+d+', '+y;
   }
   certFacts(st,code,dateStr,completion){
-    const c=completion||null;
-    const audit=String(this.certAuditLine(st.id,code)||'');
-    const segs=audit.split('|').map(x=>x.trim()).filter(Boolean);
-    const idSeg=segs.find(x=>/^certificate id\s*:/i.test(x));
-    const rawDate=dateStr||(c&&(c.date||c.completed_at))||(st&&st.dt&&st.dt[code])||'';
-    const certId=(c&&(c.certId||c.certificate_id))||(idSeg?idSeg.replace(/^certificate id\s*:\s*/i,''):'')||this.compCertId(st,code,rawDate);
+    const rawDate=dateStr||(completion&&this.completionDate(completion))||(st&&st.dt&&st.dt[code])||'';
+    const c=completion||(st?this.resolveCompletion(st.id,code,rawDate):null);
+    const certId=this.certIdFor(st,code,rawDate,c);
     // Staff ID and completion provenance are not part of the printed artwork, so they sit on one
     // small verification line rather than being dropped from the record altogether.
     const meta=['Staff ID: '+st.id].concat(c
       ? ['Course Classification: '+(c.classification||'Professional Development'),
          'Completion Source: '+(c.source||c.completion_origin||'LMS')]
-      : segs.filter(x=>!/^certificate id\s*:/i.test(x))).join('  |  ');
+      : ['Completion Source: Training record'].concat(rawDate?['Completion Date: '+rawDate]:[])).join('  |  ');
     return { date:this.certLongDate(rawDate), certId:String(certId||'').trim(), meta };
   }
   // A short name floating in the middle of a wide card looks unfinished, and a very long one has
@@ -8464,7 +8519,7 @@ class Component extends DCLogic {
   // by rendering the shortest and longest names and course titles the catalogue produces.
   certNameSize(s){ const n=String(s||'').length; return n<=14?'6.2cqw':n<=20?'5.7cqw':n<=26?'5.1cqw':n<=34?'4.5cqw':'3.9cqw'; }
   certCourseSize(s){ const n=String(s||'').length; return n<=22?'4.7cqw':n<=34?'4.1cqw':n<=50?'3.4cqw':'2.9cqw'; }
-  certBlockHTML(st,code,date,completion){ completion=completion||null; const title=this.documentCourseName(code,completion); const who=this.dispName(st); const f=this.certFacts(st,code,date,completion); const b=this.documentBranding(); // Landscape HASC certificate. Sizes are cqw (percent of the card's own width), so the SAME
+  certBlockHTML(st,code,date,completion){ completion=completion||this.resolveCompletion(st.id,code,date); const title=this.documentCourseName(code,completion); const who=this.dispName(st); const f=this.certFacts(st,code,date,completion); const b=this.documentBranding(); // Landscape HASC certificate. Sizes are cqw (percent of the card's own width), so the SAME
   // composition renders identically in the on-screen modal and on the printed landscape page.
   return '<div class="hasc-cert-page" style="container-type:inline-size;position:relative;width:100%;aspect-ratio:11/8.5;background:#fff;border:.5cqw solid #00356C;border-radius:.3cqw;overflow:hidden;box-sizing:border-box;font-family:-apple-system,&quot;Segoe UI&quot;,Helvetica,Arial,sans-serif;color:#0B2A5C"> <svg viewBox="0 0 110 85" preserveAspectRatio="none" aria-hidden="true" focusable="false" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none"> <polygon points="3.6,21 21,3.6 28,3.6 3.6,28" fill="#F3F7FB"/> <polygon points="106.4,64 89,82.4 82,82.4 106.4,57" fill="#F3F7FB"/> <polygon points="3.6,3.6 17.6,3.6 3.6,17.6" fill="#24BAD2"/> <polygon points="3.6,10.6 10.6,10.6 3.6,17.6" fill="#0E7C9B"/> <polygon points="18.8,3.6 24.9,3.6 10.5,18 4.4,18" fill="#FFD00E"/> <polygon points="106.4,82.4 92.4,82.4 106.4,68.4" fill="#24BAD2"/> <polygon points="106.4,75.4 99.4,75.4 106.4,68.4" fill="#0E7C9B"/> <polygon points="91.2,82.4 85.1,82.4 99.5,68 105.6,68" fill="#FFD00E"/> </svg> <div style="position:absolute;inset:1.45cqw;border:.28cqw solid #FFD00E;pointer-events:none"></div> <div style="position:absolute;inset:2.4cqw;border:.2cqw solid #24BAD2;pointer-events:none"></div> <div style="position:absolute;width:3.1cqw;height:3.1cqw;border-color:#0B2A5C;border-style:solid;pointer-events:none;top:3.4cqw;left:3.4cqw;border-width:.5cqw 0 0 .5cqw"></div> <div style="position:absolute;width:3.1cqw;height:3.1cqw;border-color:#0B2A5C;border-style:solid;pointer-events:none;top:3.4cqw;right:3.4cqw;border-width:.5cqw .5cqw 0 0"></div> <div style="position:absolute;width:3.1cqw;height:3.1cqw;border-color:#0B2A5C;border-style:solid;pointer-events:none;bottom:3.4cqw;left:3.4cqw;border-width:0 0 .5cqw .5cqw"></div> <div style="position:absolute;width:3.1cqw;height:3.1cqw;border-color:#0B2A5C;border-style:solid;pointer-events:none;bottom:3.4cqw;right:3.4cqw;border-width:0 .5cqw .5cqw 0"></div> <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:24cqw;font-weight:900;letter-spacing:1.1cqw;color:#F4F8FC;pointer-events:none;line-height:1;white-space:nowrap;font-family:-apple-system,&quot;Segoe UI&quot;,Helvetica,Arial,sans-serif">HASC</div> <div data-cf="col" style="position:relative;z-index:1;height:100%;box-sizing:border-box;padding:3.2cqw 6cqw 2.4cqw;display:flex;flex-direction:column;align-items:center;justify-content:space-between;text-align:center"> <div style="flex:0 0 auto;width:100%"> <img src="'+this.esc(b.logo)+'" alt="HASC Center" style="width:31cqw;max-height:10.2cqw;height:auto;object-fit:contain;display:block;margin:0 auto"> <div style="font-size:1.5cqw;font-weight:700;letter-spacing:.36cqw;text-transform:uppercase;color:#0B2A5C;margin-top:1.5cqw">'+this.esc(b.presentedBy)+'</div> <div style="display:flex;align-items:center;justify-content:center;gap:.5cqw;margin-top:1.4cqw"> <span style="flex:0 1 27cqw;height:.22cqw;background:linear-gradient(90deg,rgba(255,208,14,0) 0%,#FFD00E 38%,#24BAD2 100%)"></span> <span style="width:1.5cqw;height:1.5cqw;background:#FFD00E;transform:rotate(45deg);flex:none"></span> <span style="flex:0 1 27cqw;height:.22cqw;background:linear-gradient(90deg,#24BAD2 0%,#FFD00E 62%,rgba(255,208,14,0) 100%)"></span> </div> </div> <div style="flex:0 0 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;width:100%"> <div data-cf="title" data-cf-base="6cqw" style="font-family:Georgia,&quot;Times New Roman&quot;,serif;font-variant:small-caps;font-size:6cqw;font-weight:700;color:#08204A;letter-spacing:.12cqw;line-height:1.06;white-space:nowrap">Certificate of Completion</div> <div style="font-size:1.45cqw;font-weight:600;letter-spacing:.38cqw;text-transform:uppercase;color:#0B2A5C;margin-top:1.1cqw">This certifies that</div> <div data-cf="name" data-cf-base="'+this.certNameSize(who)+'" style="font-family:Georgia,&quot;Times New Roman&quot;,serif;font-style:italic;font-size:'+this.certNameSize(who)+';font-weight:700;color:#0A6A8E;line-height:1.16;max-width:84cqw;white-space:nowrap;margin-top:.45cqw">'+this.esc(who)+'</div> <div style="width:52cqw;height:.14cqw;background:#24BAD2;margin-top:.4cqw"></div> <div style="font-size:1.45cqw;font-weight:600;letter-spacing:.38cqw;text-transform:uppercase;color:#0B2A5C;margin-top:.95cqw">Has successfully completed</div> <div data-cf="course" data-cf-base="'+this.certCourseSize(title)+'" style="font-family:Georgia,&quot;Times New Roman&quot;,serif;font-size:'+this.certCourseSize(title)+';font-weight:700;color:#0A6A8E;line-height:1.18;max-width:86cqw;margin-top:.65cqw">'+this.esc(title)+'</div> <div style="position:relative;margin-top:1.2cqw;border:.16cqw solid #24BAD2;border-radius:1.2cqw;padding:1.6cqw 5.5cqw .8cqw"> <span style="position:absolute;top:-.85cqw;left:50%;transform:translateX(-50%);background:#fff;padding:0 1cqw;font-size:1.1cqw;font-weight:700;letter-spacing:.3cqw;text-transform:uppercase;color:#0B2A5C;white-space:nowrap">Date of Completion</span> <span style="font-family:Georgia,&quot;Times New Roman&quot;,serif;font-size:2.3cqw;font-weight:700;color:#08204A;white-space:nowrap">'+this.esc(f.date)+'</span> </div> </div> <div style="flex:0 0 auto;width:100%;margin-top:1.3cqw"> <div style="display:flex;align-items:center;justify-content:center;gap:1.4cqw;color:#0B2A5C;font-size:1.05cqw;font-weight:700;letter-spacing:.32cqw;text-transform:uppercase"> <span style="flex:0 1 13cqw;height:.12cqw;background:#0B2A5C;opacity:.55"></span><span style="white-space:nowrap">HASC Center LMS</span><span style="flex:0 1 13cqw;height:.12cqw;background:#0B2A5C;opacity:.55"></span> </div> <div style="font-size:1.18cqw;font-weight:800;letter-spacing:.1cqw;text-transform:uppercase;color:#0B2A5C;margin-top:.55cqw">Certificate ID: '+this.esc(f.certId)+'</div> '+(f.meta?('<div style="font-size:.86cqw;color:#8FA0B5;letter-spacing:.02cqw;margin-top:.5cqw">'+this.esc(f.meta)+'</div>'):'')+' <div style="display:flex;justify-content:center;gap:14cqw;margin-top:1.5cqw"> <div style="text-align:center;min-width:27cqw"><div style="font-family:&quot;Campana Script&quot;,&quot;CampanaScript&quot;,&quot;Segoe Script&quot;,&quot;Snell Roundhand&quot;,&quot;Apple Chancery&quot;,&quot;Brush Script MT&quot;,&quot;Lucida Handwriting&quot;,cursive;font-size:3cqw;font-weight:500;line-height:1.05;color:#0B2A5C;padding-bottom:.3cqw">Aryeh Samuelson</div><div style="height:.12cqw;background:#0B2A5C;opacity:.8"></div><div style="font-size:1.14cqw;font-weight:800;letter-spacing:.18cqw;text-transform:uppercase;color:#0B2A5C;margin-top:.55cqw">Aryeh Samuelson</div><div style="font-size:1.02cqw;font-weight:600;letter-spacing:.16cqw;text-transform:uppercase;color:#0B2A5C;margin-top:.15cqw">Director of Staff Training</div><div style="font-size:1.02cqw;font-weight:600;letter-spacing:.16cqw;text-transform:uppercase;color:#0B2A5C;margin-top:.15cqw">HASC Center</div></div> <div style="text-align:center;min-width:27cqw"><div style="font-family:&quot;Campana Script&quot;,&quot;CampanaScript&quot;,&quot;Segoe Script&quot;,&quot;Snell Roundhand&quot;,&quot;Apple Chancery&quot;,&quot;Brush Script MT&quot;,&quot;Lucida Handwriting&quot;,cursive;font-size:3cqw;font-weight:500;line-height:1.05;color:#0B2A5C;padding-bottom:.3cqw">Avi Sacks</div><div style="height:.12cqw;background:#0B2A5C;opacity:.8"></div><div style="font-size:1.14cqw;font-weight:800;letter-spacing:.18cqw;text-transform:uppercase;color:#0B2A5C;margin-top:.55cqw">Avi Sacks</div><div style="font-size:1.02cqw;font-weight:600;letter-spacing:.16cqw;text-transform:uppercase;color:#0B2A5C;margin-top:.15cqw">Chief Operating Officer</div><div style="font-size:1.02cqw;font-weight:600;letter-spacing:.16cqw;text-transform:uppercase;color:#0B2A5C;margin-top:.15cqw">HASC Center</div></div> </div> </div> </div> </div>'; }
   printAllCerts(loc,staffIds,includeLegacy=true){ const explicit=Array.isArray(staffIds); const requested=new Set((explicit?staffIds:[]).filter(Boolean).map(String)); if(explicit&&!requested.size){ this.toast('No staff match the current search or filters \u2014 nothing was printed.'); return; } const allowed=this.batchScope(loc); const list=explicit?allowed.filter(st=>requested.has(String(st.id))):allowed; if(!list.length){ this.toast(requested.size?'None of the selected staff are within your authorized print scope.':'No authorized staff to print for that selection.'); return; } const role=(this.state.currentUser&&this.state.currentUser.role)||'admin'; const MAX_CERTS=400; let blocks=[],printedFor=0,truncated=false; for(const st of list){ if(blocks.length>=MAX_CERTS){truncated=true;break;} const rows=this.printableCertificateRows(st,role).filter(r=>includeLegacy||!r.legacy); if(!rows.length) continue; for(const r of rows){ if(blocks.length>=MAX_CERTS){truncated=true;break;} blocks.push(this.certBlockHTML(st,r.code,r.completed,this.completionRecordById(r.completionId))); } printedFor++; } if(!blocks.length){ this.toast('No certificates on record for the selected staff.'); return; } const selectedBatch=requested.size>0; this._mirrorToService('doc.certificate', S=>S.logGeneratedDocument({type:selectedBatch?'Certificate (selected staff batch)':'Certificate (batch)',scope:selectedBatch?('selected '+list.length):(loc||'all'),staffIds:selectedBatch?list.map(st=>st.id):undefined,certificateCount:blocks.length,role,portal:role==='manager'?'Manager':'Admin'},role)); const inner=blocks.map((b,i)=>'<div style="'+(i?'page-break-before:always;':'')+'">'+b+'</div>').join(''); this.toast('Preparing '+blocks.length+' certificate'+(blocks.length===1?'':'s')+' for '+printedFor+' staff member'+(printedFor===1?'':'s')+'\u2026'+(truncated?(' Stopped at the '+MAX_CERTS+'-certificate limit for one print job \u2014 narrow the selection to print the rest.'):'')); this.printHTML(inner,'cert'); }
@@ -9190,20 +9245,24 @@ class Component extends DCLogic {
     // compliance code is configured issueCertificate:true. All configured LMS course codes
     // currently issue certificates; non-catalog/professional-development content may still opt out.
     const certGen = c.code ? this.issuesCertificate(c.code) : (c.certEnabled!==false);
-    const expDays={'Annual':365,'Every 2 years':730,'Every 3 years':1095}[c.expiration]; let expStr='No expiration'; if(expDays){ const e=new Date(today); e.setDate(e.getDate()+expDays); expStr=(e.getMonth()+1)+'/'+e.getDate()+'/'+String(e.getFullYear()).slice(2); }
-    const newComp={id:'vc'+Date.now(), courseId:c.id, courseTitle:c.title, code:c.code, complianceCode:c.code, version:c.version||1, staffId:sid, date:dstr, expires:expStr, certGenerated:certGen, certId:certGen?('CERT-'+c.id+'-v'+(c.version||1)+'-'+sid):null, source:'online course'};
-    // Idempotent write: a repeat completion of the same staff+course+version UPDATES the existing
-    // online record (fresh date/expiry) instead of appending a duplicate.
+    // Auto-computed expiry (expOverride:false): the course's compliance renewal rule decides, and
+    // the course's own setting covers courses without a compliance code.
+    const expDays={'Annual':365,'Every 2 years':730,'Every 3 years':1095}[c.expiration]; const _stE=this.staffById(sid); let expStr=c.code?this.expiryDateFor(_stE,c.code,dstr):'No expiration'; if(expStr==='No expiration'&&expDays&&!c.code){ expStr=this.formatMDY(this.addIntervalDate(dstr,expDays)); }
     const _comps=(this.state.docs.completions||[]);
-    const _dupIdx=_comps.findIndex(x=>x.staffId===sid && ((x.complianceCode||x.code||x.course)===c.code || x.courseId===c.id) && ((x.version||1)===(c.version||1)) && /online/i.test(x.source||''));
-    const docs={...this.state.docs, completions: _dupIdx>=0 ? _comps.map((x,i)=>i===_dupIdx?{...x,...newComp,id:x.id}:x) : [..._comps, newComp]};
+    const _same=x=>String(x.staffId)===String(sid) && ((x.complianceCode||x.code||x.course)===c.code || x.courseId===c.id) && ((x.version||1)===(c.version||1)) && /online/i.test(x.source||'');
+    // Only a genuine double-submit (same course, version and date) updates in place. A retake on a
+    // later date is a new completion with its own certificate number; the earlier one stays on record.
+    const _dupIdx=_comps.findIndex(x=>_same(x)&&x.date===dstr);
+    const _prior=_comps.filter(_same).length, _baseCert='CERT-'+c.id+'-v'+(c.version||1)+'-'+sid;
+    const newComp={id:'vc'+Date.now(), courseId:c.id, courseTitle:c.title, code:c.code, complianceCode:c.code, version:c.version||1, staffId:sid, date:dstr, expires:expStr, expOverride:false, certGenerated:certGen, certId:certGen?(_prior&&_dupIdx<0?_baseCert+'-R'+(_prior+1):_baseCert):null, source:'online course'};
+    const docs={...this.state.docs, completions: _dupIdx>=0 ? _comps.map((x,i)=>i===_dupIdx?{...x,...newComp,id:x.id,certId:x.certId||newComp.certId}:x) : [..._comps, newComp]};
     { const _stN=this.staffById(sid); const _nw=new Date();
       docs.notifications=[{ id:'ntf'+_nw.getTime()+'-'+Math.floor(Math.random()*10000), t:_nw.getTime(),
         ts:_nw.toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'}),
         kind:'complete', title:c.title, ctype:'Online course', staffId:sid, staff:_stN?_stN.name:String(sid), loc:(_stN&&_stN.loc)||'—', read:false, watched:100, score:this.cpQuizScore(c) },
         ...(((this.state.docs&&this.state.docs.notifications)||[]))].slice(0,300); }
     const prog={...this.state.courseProg}; prog[this.progKey(c.id,sid)]={status:'Completed',pct:100,done:{},completed:dstr};
-    const roster=this.state.roster.map(r=> r.id===sid && c.code ? {...r, rec:{...r.rec,[c.code]:'g'}, dt:{...r.dt,[c.code]:dstr}} : r);
+    const roster=this.applyCompletionsToRoster(this.applyVoidsToRoster(this.state.roster,docs),docs);
     this.saveDocs(docs); this.setState({courseProg:prog, roster, coursePlayerId:null});
     // Cross-portal sync: mirror the completion into the SHARED store so the Staff Training
     // Portal sees it immediately (and after reload).
@@ -10074,7 +10133,7 @@ class Component extends DCLogic {
   async onXcFilePick(e){ const f=e.target.files&&e.target.files[0]; if(!f)return; const url=await this.readFile(f); this.setState({xcFile:url, xcFileName:f.name}); }
   EXT_CERT_TYPES=[{key:'CPR',label:'CPR',satisfies:['CPR'],exp:'+2y'},{key:'FA',label:'First Aid',satisfies:['FA'],exp:'+2y'},{key:'EMT',label:'EMT Card',satisfies:['CPR','FA'],exp:'manual'},{key:'SCIPF',label:'SCIP Full',satisfies:['SCIPR'],exp:'+1y'},{key:'SCIPR',label:'SCIP Recertification',satisfies:['SCIPR'],exp:'+1y'},{key:'AMAP',label:'AMAP Certificate',satisfies:['AMAP'],exp:'none'}];
   extCertType(key){ return this.EXT_CERT_TYPES.find(t=>t.key===key)||{key,label:this.courseLabel(key),satisfies:[key],exp:'rule'}; }
-  addYears(mdy,yrs){ const p=String(mdy).split('/'); if(p.length<3) return ''; let y=this._yr(+p[2]); const d=new Date(y+yrs,+p[0]-1,+p[1]); return (d.getMonth()+1)+'/'+d.getDate()+'/'+String(d.getFullYear()).slice(2); }
+  addYears(mdy,yrs){ const d=this.addIntervalDate(mdy,(+yrs||0)*365); return d?this.formatMDY(d):''; }
   calculateExternalCertificateExpiration(type,date,entered){ const t=this.extCertType(type); if((entered||'').trim()) return entered.trim(); if(t.exp==='none') return 'No expiration'; if(t.exp==='manual') return ''; if(t.exp==='+2y') return this.addYears(date,2); if(t.exp==='+1y') return this.addYears(date,1); return this.calcExpiry(t.satisfies[0],date); }
   xcSuggestExp(type,date){ const t=this.extCertType(type); if(t.exp==='none') return 'No expiration'; if(t.exp==='manual') return (date&&date.trim())?this.addYears(date,2):''; if(t.exp==='+2y') return (date&&date.trim())?this.addYears(date,2):''; if(t.exp==='+1y') return (date&&date.trim())?this.addYears(date,1):''; return this.calcExpiry(t.satisfies[0],date); }
   xcSetCourse(v){ const date=this.state.xcDate; this.setState({xcCourse:v, xcExpManual:false, xcExp:this.xcSuggestExp(v,date)}); }
@@ -10193,7 +10252,7 @@ class Component extends DCLogic {
     const docs={...this.state.docs,extCerts:[...(this.state.docs.extCerts||[]),ext],completions:[...(this.state.docs.completions||[]),comp]};const roster=this.applyCompletionsToRoster(this.applyVoidsToRoster(this.state.roster,docs),docs);
     this.saveDocs(docs);this.setState({roster,xcFile:null,xcFileName:'',xcNote:'',xcExp:''});this._mirrorToService('extcert.add',S=>S.log({actor:'Admin',role:'admin',action:'External certificate added (admin direct)',entity:'external_certificates',entity_id:ecId,after:'approved',portal:'Admin',severity:'Compliance',staff:st?st.name:id}));this.logAudit('Admin direct external certificate uploaded',{staff:st?st.name:id,target:t.label,next:'approved · '+date+' · exp '+exp,notes:'Satisfies: '+sat.join(', '),sev:'Compliance',relatedId:ecId});this.toast(t.label+' recorded — posted to transcript & compliance.');
   }
-  calcExpiry(code,date){ const days=this.catalogIntervalDays(code); if(!days) return 'No expiration'; const p=String(date||'').split('/'); if(p.length<3) return 'No expiration'; const yy=+p[2]; const d=new Date(this._yr(yy), +p[0]-1, +p[1]); if(isNaN(d)) return 'No expiration'; if(days%365===0){ d.setFullYear(d.getFullYear()+days/365); } else { d.setDate(d.getDate()+days); } return (d.getMonth()+1)+'/'+d.getDate()+'/'+String(d.getFullYear()).slice(2); }
+  calcExpiry(code,date,staff){ const days=this.expiryIntervalDays(staff||null,code); if(!days) return 'No expiration'; const d=this.addIntervalDate(date,days); return d?this.formatMDY(d):'No expiration'; }
   async onCompCertFilePick(e){ const f=e.target.files&&e.target.files[0]; if(!f)return; const url=await this.readFile(f); this.setState({compCertFile:url, compCertName:f.name}); }
   // ===== Add Independent Session: course-aware expiration generation =====
   // Resolves the exact renewal rule for the selected catalog item. Built-in courses follow
@@ -10218,9 +10277,7 @@ class Component extends DCLogic {
     }
     const ov=(staff&&typeof this.locOverrideFor==='function')?this.locOverrideFor(staff,code):null;
     if(ov&&ov.oneTime) return {courseKey:sc.key,code,kind:'none',days:null,label:'One-time course — no expiration (location rule)'};
-    const NOEXP=['O1','O2','O3','PA','DYS','SDCH1','SDCH2','AMAP','AMAP811','AMAP1','AMAP2','SCIP1','SCIP2','EPP','RNORI','RNPLAN','PONS','DIAB','CB','TF'];
-    if(NOEXP.includes(code)) return {courseKey:sc.key,code,kind:'none',days:null,label:'One-time course — no expiration'};
-    const days=(ov&&Number(ov.intervalDays)>0)?Number(ov.intervalDays):Number(this.catalogIntervalDays(code));
+    const days=Number(this.expiryIntervalDays(staff,code));
     if(!(days>0)) return {courseKey:sc.key,code,kind:'none',days:null,label:'One-time course — no expiration'};
     const cycle=days%365===0?(days/365+' year'+(days===365?'':'s')):(days+' days');
     return {courseKey:sc.key,code,kind:'timed',days,label:'Renew every '+cycle+(ov&&ov.intervalDays?' (location rule)':'')};
@@ -10230,9 +10287,7 @@ class Component extends DCLogic {
     if(rule.kind==='none') return 'No expiration';
     if(rule.kind==='manual') return '';
     const d=this.parseMDY(date); if(!d) return '';
-    const x=new Date(d);
-    if(rule.days%365===0) x.setFullYear(x.getFullYear()+rule.days/365); else x.setDate(x.getDate()+rule.days);
-    return this.formatMDY(x);
+    return this.formatMDY(this.addIntervalDate(d,rule.days));
   }
   // Backward-compatible helper used by diagnostics and the form. It accepts either a course key
   // (CPR_IN_PERSON) or a compliance code (CPR).
@@ -10256,7 +10311,7 @@ class Component extends DCLogic {
     if(!parsedDate){this.toast('Enter a valid completion date in month/day/year format.');return;}
     {const _e=this.completionDateError(parsedDate);if(_e){this.toast(_e);return;}}
     const date=this.formatMDY(parsedDate),key=this.completionKey(id,code,date),voids=this.voidKeySet();
-    if((this.state.docs.completions||[]).some(c=>String(c.staffId)===String(id)&&(c.complianceCode||c.code||c.course)===code&&c.date===date&&!voids.has(key))){this.toast('That staff member already has this course recorded for '+date+'.');return;}
+    if((this.state.docs.completions||[]).some(c=>String(c.staffId)===String(id)&&(c.complianceCode||c.code||c.course)===code&&c.date===date&&!this.isCompletionVoided(c))){this.toast('That staff member already has this course recorded for '+date+'.');return;}
     const note=(this.state.compNote||'').trim(),rule=this.independentCourseExpiryRule(this.state.compCourse,id),autoExp=this.independentExpirationFor(this.state.compCourse,date,id);
     let manualExp=this.state.compExpManual?String(this.state.compExp||'').trim():'';
     if(rule.kind==='manual'&&!manualExp){this.toast('This course uses a custom expiration. Enter the approved expiration date before saving.');return;}
@@ -10340,7 +10395,16 @@ class Component extends DCLogic {
   // Role-based certificate visibility: staff see staff-visible only; managers see manager- or
   // staff-visible; admins see everything (including admin-only/internal docs like AMAP 811).
   canSeeCertAs(code, role){ const v=this.certVisibilityFor(code); if(role==='admin') return true; if(role==='manager') return v==='manager'||v==='staff'; return v==='staff'; }
-  setCourseCertConfig(code, patch){ const cc={...((this.state.docs&&this.state.docs.courseConfig)||{})}; cc[code]={...this.courseConfig(code), ...patch}; const docs={...this.state.docs, courseConfig:cc}; this.saveDocs(docs); const c=cc[code]; this.logAudit('Course certificate setting changed',{target:(this.COURSE_NAME[code]||code)+' ('+code+')', next:'issueCertificate='+(c.issueCertificate?'Yes':'No')+' \u00b7 '+(c.visibility||'staff'), notes:'type='+(c.certificateType||'')+' \u00b7 template='+(c.certificateTemplate||'')+' \u00b7 expSource='+(c.certificateExpirationSource||''), sev:'Compliance', relatedId:code}); }
+  // Turning a course's certificate on/off applies to completions recorded from now on. The prior
+  // setting is kept in certHistory so records created before the change keep their certificate.
+  certIssuedForRecord(code,rec){ code=String(code||'').toUpperCase(); const cfg=this.courseConfig(code), ov=(this.state.docs&&this.state.docs.courseConfig&&this.state.docs.courseConfig[code])||{}, hist=Array.isArray(ov.certHistory)?ov.certHistory:[];
+    let now=!!cfg.issueCertificate;
+    if(!now&&!this.isCertificateCatalogCode(code)){ const cat=this.catalogCourseByCode(code); if(cat&&cat.active===false) now=cat.certificateEligible!==false&&ov.issueCertificate!==false; } // retired course: earned certificates stay
+    if(!hist.length) return now;
+    // Day-only stamps (when: M/D/YY) count as end of that day, so a record entered after a same-day change follows the new setting.
+    const raw=rec&&(rec.createdAt||rec.created_at||rec.official_completion_at||rec.when), dayOnly=raw&&/^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(String(raw).trim()); const d=raw?(dayOnly?this.parseMDY(raw):new Date(raw)):null; const t=(d&&!isNaN(d))?d.getTime()+(dayOnly?86399999:0):-Infinity;
+    const h=hist.find(x=>{ const u=new Date(x.until).getTime(); return isFinite(u)&&u>t; }); return h?!!h.issueCertificate:now; }
+  setCourseCertConfig(code, patch){ const cc={...((this.state.docs&&this.state.docs.courseConfig)||{})}; const prevCfg=this.courseConfig(code); cc[code]={...prevCfg, ...patch}; if(patch&&patch.issueCertificate!=null&&!!patch.issueCertificate!==!!prevCfg.issueCertificate) cc[code].certHistory=[...(Array.isArray(prevCfg.certHistory)?prevCfg.certHistory:[]),{issueCertificate:!!prevCfg.issueCertificate,until:new Date().toISOString()}]; const docs={...this.state.docs, courseConfig:cc}; this.saveDocs(docs); const c=cc[code]; this.logAudit('Course certificate setting changed',{target:(this.COURSE_NAME[code]||code)+' ('+code+')', next:'issueCertificate='+(c.issueCertificate?'Yes':'No')+' \u00b7 '+(c.visibility||'staff'), notes:'type='+(c.certificateType||'')+' \u00b7 template='+(c.certificateTemplate||'')+' \u00b7 expSource='+(c.certificateExpirationSource||''), sev:'Compliance', relatedId:code}); }
   toggleCourseCert(code){ const next=!this.issuesCertificate(code); this.setCourseCertConfig(code, {issueCertificate:next}); this.toast((this.COURSE_NAME[code]||code)+': certificate '+(next?'ENABLED — future completions generate a certificate.':'DISABLED — future completions are transcript-only.')); }
 
   /* ===== PERFORMANCE: lightweight memo cache keyed on data-object identity =====
@@ -10629,9 +10693,24 @@ class Component extends DCLogic {
   _renderEffSnapshot(){ return { calls:this.__effLastRender||0, typing:!!this.__wasTyping, warn:(this.__effLastRender||0)>3000 }; }
   _locIndex(){ return this._memo('locIndex',[this.state.locations], ()=>{ const locs=this.state.locations||[]; const exact={},alias={},byId={}; locs.forEach(l=>{ byId[l.id]=l; const k=this.normalizeLocationName(l.name); exact[k]=l; (l.aliases||[]).forEach(a=>{ const ak=this.normalizeLocationName(a); if(!exact[ak]&&!alias[ak]) alias[ak]=l; }); }); return {exact,alias,byId}; }); }
   completionKey(staffId, code, date){ return String(staffId)+'|'+String(code)+'|'+String(date||'').replace(/\s+/g,''); }
-  voidKeySet(){ return this._memo('voidKeySet',[(this.state.docs&&this.state.docs.completionVoids)],()=>new Set(((this.state.docs&&this.state.docs.completionVoids)||[]).map(v=>v.key))); }
-  voidMap(){ return this._memo('voidMap',[(this.state.docs&&this.state.docs.completionVoids)],()=>{ const m={}; ((this.state.docs&&this.state.docs.completionVoids)||[]).forEach(v=>{ m[v.key]=v; }); return m; }); }
-  isCompVoided(staffId,code,date){ return this.voidKeySet().has(this.completionKey(staffId,code,date)); }
+  // Voids are append-only. A later {type:'reinstated'} entry cancels the void it names (voidId)
+  // instead of deleting it, so the void history survives an un-void.
+  activeVoids(docs){ const all=((docs||this.state.docs||{}).completionVoids)||[]; if(!all.some(v=>v&&v.type==='reinstated')) return all.filter(v=>v&&v.key); const re=new Set(all.filter(v=>v&&v.type==='reinstated').map(v=>v.reinstatesVoidId)); return all.filter(v=>v&&v.key&&v.type!=='reinstated'&&!re.has(v.voidId)); }
+  // Void entries written with a completionId target that one completion record. Older entries
+  // (and voids of roster-only rows) carry only the staff|code|date key and keep matching by key.
+  voidIndex(docs){ const arr=((docs||this.state.docs||{}).completionVoids)||[]; this.__vidx=this.__vidx||new WeakMap(); const hit=this.__vidx.get(arr); if(hit) return hit;
+    const keys=new Set(),ids=new Map(),idKeys=new Map(),byKey={};
+    this.activeVoids({completionVoids:arr}).forEach(v=>{ const cid=v.completionId!=null&&v.completionId!==''?String(v.completionId):''; if(cid){ if(!ids.has(cid)) ids.set(cid,v); if(!idKeys.has(v.key)) idKeys.set(v.key,v); } else { keys.add(v.key); } if(!byKey[v.key]) byKey[v.key]=v; });
+    const out={keys,ids,idKeys,byKey,all:new Set(Object.keys(byKey))}; this.__vidx.set(arr,out); return out; }
+  // Is this completion record voided? By its own id, else by a key-only void on its primary code.
+  isCompletionVoided(c,vi){ if(!c) return false; vi=vi||this.voidIndex(); const id=this.completionIdValue(c); if(id!=null&&vi.ids.has(String(id))) return true; const sid=this.completionStaffId(c),date=this.completionDate(c); const codes=[this.completionComplianceCode(c),this.completionCode(c)].filter(Boolean); return codes.some(code=>vi.keys.has(this.completionKey(sid,code,date))); }
+  // The void entry for one completion-list row (record `match` may be null for roster-only rows).
+  voidEntryFor(staffId,code,date,match,vi){ vi=vi||this.voidIndex(); const key=this.completionKey(staffId,code,date); const id=match?this.completionIdValue(match):null; if(id!=null&&vi.ids.has(String(id))) return vi.ids.get(String(id)); if(vi.keys.has(key)) return vi.byKey[key]; if(!match&&vi.idKeys.has(key)) return vi.idKeys.get(key); return null; }
+  voidKeySet(){ return this.voidIndex().all; }
+  voidMap(){ return this.voidIndex().byKey; }
+  // Key-level (roster date) check: a key-only void, or an id-targeted void with no surviving
+  // completion re-entered for the same staff/course/date.
+  isCompVoided(staffId,code,date){ const vi=this.voidIndex(),key=this.completionKey(staffId,code,date); if(vi.keys.has(key)) return true; if(!vi.idKeys.has(key)) return false; const sid=String(staffId),k=String(code||'').toUpperCase(); return !((this.state.docs&&this.state.docs.completions)||[]).some(c=>c.referenceSuperseded!==true&&this.completionStaffId(c)===sid&&String(this.completionDate(c))===String(date)&&this.completionRosterCodes(c).some(x=>x.code===k)&&!this.isCompletionVoided(c,vi)); }
   compDateVal(mdy){ if(!mdy||mdy==='\u2014'||mdy==='No expiration') return 0; const p=String(mdy).split('/'); if(p.length<3) return 0; let y=+p[2]; if(isNaN(y))return 0; y=this._yr(y); return new Date(y,(+p[0]||1)-1,(+p[1]||1)).getTime(); }
   compIsExpired(expires){ if(!expires||expires==='No expiration'||expires==='\u2014') return false; const v=this.compDateVal(expires); if(!v) return false; return v < ((this.todayDate&&this.todayDate())||new Date()).getTime(); }
   classifyCompSource(src, isSeed){ const s=String(src||'').toLowerCase(); if(/online/.test(s)) return 'Online Course'; if(/external/.test(s)) return 'External Certificate'; if(/internal/.test(s)) return 'Internal Certificate'; if(/session|in-person|attendance/.test(s)) return 'Session'; if(/import|historical/.test(s)) return 'Import'; if(/pouring|slms|independent|manual|admin/.test(s)) return 'Manual Admin Entry'; return isSeed?'Import':'Manual Admin Entry'; }
@@ -10639,12 +10718,12 @@ class Component extends DCLogic {
   // Build one normalized completion record for the management list.
   mkCompRecord(st, code, date, match, vmap, isSeed){
     code=String(code||'').toUpperCase();
-    const key=this.completionKey(st.id, code, date),ve=vmap[key]||null;
-    const expires=this.completionExpires(match)||this.expirationFor(st, code, date);
+    const key=this.completionKey(st.id, code, date),ve=this.voidEntryFor(st.id,code,date,match||null);
+    const expires=this.expirationFor(st, code, date, match||null);
     const source=(match&&(match.source||match.completion_origin||match.origin))||'';
     const bucket=this.classifyCompSource(source,isSeed),displaySource=source||(isSeed?'Historical / imported record':'Recorded completion');
-    const certId=(match&&(match.certId||match.certificate_id))||this.compCertId(st, code, date),expired=this.compIsExpired(expires),voided=!!ve,cfg=this.courseConfig(code);
-    const recCertGen=this.completionCertFlag(match),issuesCert=!!cfg.issueCertificate||recCertGen===true,certVis=cfg.visibility||'staff';
+    const certId=this.certIdFor(st, code, date, match||null),expired=this.compIsExpired(expires),voided=!!ve,cfg=this.courseConfig(code);
+    const recCertGen=this.completionCertFlag(match),issuesCert=recCertGen===true||this.certIssuedForRecord(code,match),certVis=cfg.visibility||'staff';
     const reso=((this.state.docs&&this.state.docs.certResolutions)||{})[key]||null;
     let certStatus, certGen, flaggedReview=false;
     if(voided){ certStatus='voided'; certGen=false; }
@@ -10684,12 +10763,18 @@ class Component extends DCLogic {
   }
   _buildCompletionRecords(staffList){
     const vmap=this.voidMap(),docComps=(this.state.docs.completions||[]).filter(c=>c.referenceSuperseded!==true),ss=this.SS(),shared=((ss&&ss.vtCompletions&&ss.vtCompletions())||[]).filter(c=>!c.voided),docIds=new Set(docComps.map(c=>String(this.completionIdValue(c)||'')).filter(Boolean)),comps=[...docComps,...shared.filter(c=>{const id=String(this.completionIdValue(c)||'');return !id||!docIds.has(id);})],byStaff={},byExact=Object.create(null);
-    comps.forEach(c=>{ const sid=this.completionStaffId(c),code=this.completionComplianceCode(c)||this.completionCode(c),date=this.completionDate(c); if(!sid)return; (byStaff[sid]=byStaff[sid]||[]).push(c); if(code&&date){const k=sid+'|'+String(code)+'|'+String(date);if(byExact[k]===undefined)byExact[k]=c;} });
+    const vi=this.voidIndex();
+    // Index each record under its own code and every requirement it satisfies (EMT card -> CPR, FA;
+    // legacy "CPR+FA"), preferring a live record over a voided one for the same staff/code/date.
+    comps.forEach(c=>{ const sid=this.completionStaffId(c),code=this.completionComplianceCode(c)||this.completionCode(c),date=this.completionDate(c); if(!sid)return; (byStaff[sid]=byStaff[sid]||[]).push(c); if(!code||!date)return; const codes=new Set([String(code)]); this.completionRosterCodes(c).forEach(x=>{ if(x.via===x.code) codes.add(x.code); }); const live=!this.isCompletionVoided(c,vi); codes.forEach(cd=>{ const k=sid+'|'+cd+'|'+String(date),cur=byExact[k]; if(cur===undefined||(live&&this.isCompletionVoided(cur,vi)))byExact[k]=c; }); });
     const out=[];
     (staffList||this.state.roster||[]).forEach(st=>{
-      const sid=String(st.id),seen=new Set(),mine=byStaff[sid]||[];
-      Object.keys(st.dt||{}).forEach(rawCode=>{const code=String(rawCode||'').toUpperCase(),date=st.dt[rawCode];if(!date||date==='—')return;const match=byExact[sid+'|'+code+'|'+String(date)];out.push(this.mkCompRecord(st,code,date,match,vmap,true));seen.add(code+'|'+date);});
-      mine.forEach(c=>{const code=this.completionComplianceCode(c)||this.completionCode(c),date=this.completionDate(c);if(!code||!date||date==='—')return;const k=code+'|'+date;if(seen.has(k))return;seen.add(k);out.push(this.mkCompRecord(st,code,date,c,vmap,false));});
+      const sid=String(st.id),seen=new Map(),emitted=new Set(),mine=byStaff[sid]||[];
+      const mark=(k,r)=>{ const s0=seen.get(k)||{live:false,voided:false}; if(r.voided)s0.voided=true; else s0.live=true; seen.set(k,s0); if(r.completionId)emitted.add(String(r.completionId)); };
+      Object.keys(st.dt||{}).forEach(rawCode=>{const code=String(rawCode||'').toUpperCase(),date=st.dt[rawCode];if(!date||date==='—')return;const match=byExact[sid+'|'+code+'|'+String(date)];const r=this.mkCompRecord(st,code,date,match,vmap,true);out.push(r);mark(code+'|'+date,r);});
+      // One row per completion record: a record already shown on a roster row is not repeated, and a
+      // voided record stays listed next to a corrected re-entry of the same course and date.
+      mine.forEach(c=>{const code=this.completionComplianceCode(c)||this.completionCode(c),date=this.completionDate(c);if(!code||!date||date==='—')return;const id=this.completionIdValue(c);if(id!=null&&emitted.has(String(id)))return;const k=code+'|'+date,s0=seen.get(k),v=this.isCompletionVoided(c,vi);if(s0&&(v?s0.voided:s0.live))return;const r=this.mkCompRecord(st,code,date,c,vmap,false);out.push(r);mark(k,r);});
     });
     return out;
   }
@@ -10721,7 +10806,7 @@ class Component extends DCLogic {
   }
   // Replay voids onto a roster (called at load + after each void) so compliance reflects them.
   applyVoidsToRoster(roster, docs){
-    const voids=(docs&&docs.completionVoids)||[]; if(!voids.length) return roster;
+    const voids=this.activeVoids(docs); if(!voids.length) return roster;
     const comps=(docs&&docs.completions)||[]; const voidedKeys=new Set(voids.map(v=>v.key));
     // Voiding a completion also voids the rows it satisfied (AMAP Day 2 -> AMAP) on that date.
     const altOf=(v)=>this.completionSatisfies(String(v.code||'').toUpperCase());
@@ -10758,11 +10843,13 @@ class Component extends DCLogic {
   _completionReferenceIndex(){ if(this.__crIdx) return this.__crIdx; const m=new Map(); try{ (window.HASC_COMPLETION_REFERENCE_20260915||[]).forEach(r=>{ if(r&&r.id!=null) m.set(String(r.id),r.dt||{}); }); }catch(e){} this.__crIdx=m; return m; }
   effStatusLabel(st, code){ const l=this.effStatus(st, code); const map={g:'Compliant',y:'Due soon',o:'Due soon',r:'Missing / Expired',w:'Not on record',na:'Not required',info:'On record'}; return map[l]||l; }
   // ---- void modal ----
-  openVoidModal(key){ const rec=this.buildCompletionRecords().find(r=>r.key===key); if(!rec){ this.toast('Completion not found.'); return; } this.setState({modal:{type:'void', rec, reason:'', ack:false}}); }
+  openVoidModal(key,completionId){ const all=this.buildCompletionRecords().filter(r=>r.key===key); const rec=(completionId?all.find(r=>String(r.completionId)===String(completionId)):null)||all.find(r=>!r.voided)||all[0]; if(!rec){ this.toast('Completion not found.'); return; } this.setState({modal:{type:'void', rec, reason:'', ack:false}}); }
   voidCompletion(){
     const cu=this.state.currentUser;if(!cu||cu.role!=='admin'){this.toast('Only administrators can void completions.');return;}const m=this.state.modal;if(!m||m.type!=='void'||!m.rec)return;const reason=(m.reason||'').trim();if(!reason){this.toast('A reason is required to void a completion.');return;}if(!m.ack){this.toast('Please confirm the acknowledgment to continue.');return;}
     const rec=m.rec,st=this.staffById(rec.staffId);if(!st){this.toast('Staff not found.');return;}const prior=this.effStatusLabel(st,rec.code),d=this.staffChangeStamp(),codes=[...new Set((rec.affectedCodes&&rec.affectedCodes.length?rec.affectedCodes:[rec.code]).concat([rec.code]))];
-    const existing=new Set((this.state.docs.completionVoids||[]).map(v=>v.key));const entries=[];codes.forEach((code,i)=>{const key=this.completionKey(rec.staffId,code,rec.date);if(existing.has(key))return;entries.push({voidId:'vd'+d.t+'_'+i+'_'+Math.floor(Math.random()*10000),key,staffId:rec.staffId,staffName:rec.staffName,empId:rec.empId,locName:rec.locName,code,course:this.COURSE_NAME[code]||rec.course,family:this.compFamily(code),completionDate:rec.date,expires:rec.expires,source:rec.displaySource,sourceBucket:rec.sourceBucket,sessionId:rec.sessionId,certId:rec.hasCert?rec.certId:'',certVoided:!!rec.hasCert,reason,voidedBy:cu.name||'Admin',voidDate:d.ts,t:d.t,priorStatus:i===0?prior:'',newStatus:''});});
+    // A void targets this completion record by id (key kept for older readers); roster-only rows
+    // without a record fall back to the staff|code|date key.
+    const vi=this.voidIndex(),cid=rec.completionId?String(rec.completionId):'';if(cid&&vi.ids.has(cid)){this.toast('This completion is already voided.');return;}const entries=[];codes.forEach((code,i)=>{const key=this.completionKey(rec.staffId,code,rec.date);if(!cid&&vi.keys.has(key))return;entries.push({voidId:'vd'+d.t+'_'+i+'_'+Math.floor(Math.random()*10000),key,completionId:cid,staffId:rec.staffId,staffName:rec.staffName,empId:rec.empId,locName:rec.locName,code,course:this.COURSE_NAME[code]||rec.course,family:this.compFamily(code),completionDate:rec.date,expires:rec.expires,source:rec.displaySource,sourceBucket:rec.sourceBucket,sessionId:rec.sessionId,certId:rec.hasCert?rec.certId:'',certVoided:!!rec.hasCert,reason,voidedBy:cu.name||'Admin',voidDate:d.ts,t:d.t,priorStatus:i===0?prior:'',newStatus:''});});
     const docs={...this.state.docs,completionVoids:[...entries,...(this.state.docs.completionVoids||[])]};const roster=this.applyCompletionsToRoster(this.applyVoidsToRoster(this.state.roster,docs),docs),newSt=roster.find(r=>String(r.id)===String(rec.staffId)),next=newSt?this.effStatusLabel(newSt,rec.code):'—';entries.forEach(e=>e.newStatus=next);
     this.saveDocs(docs);this.setState({roster,modal:null});
     if(rec.videoId&&rec.completionId&&this.SS()&&this.SS().vtVoidCompletion){this.SS().vtVoidCompletion(rec.completionId,reason,cu.name||'Admin');this.setState(x=>({storeVer:(x.storeVer||0)+1}));}
@@ -10772,7 +10859,8 @@ class Component extends DCLogic {
   // ===== CERTIFICATE STATUS MODEL — shared lookups + Missing/Error review resolution =====
   // Map of completionKey -> certStatus, used by Staff/Manager/Admin certificate views so a
   // resolution (generate / internal / void / flag) propagates everywhere at once. Memoized.
-  certStatusMap(){ return this._memo('certStatusMap',[this.state.roster,this.state.docs.completions,this.state.docs.completionVoids,(this.state.docs&&this.state.docs.courseConfig),(this.state.docs&&this.state.docs.certResolutions)],()=>{ const m={}; this.buildCompletionRecords().forEach(r=>{ m[r.key]=r.certStatus; }); return m; }); }
+  certStatusMap(){ return this._memo('certStatusMap',[this.state.roster,this.state.docs.completions,this.state.docs.completionVoids,(this.state.docs&&this.state.docs.courseConfig),(this.state.docs&&this.state.docs.certResolutions)],()=>{ const m={},byId={}; this.buildCompletionRecords().forEach(r=>{ if(!m[r.key]||m[r.key]==='voided') m[r.key]=r.certStatus; if(r.completionId) byId[String(r.completionId)]=r.certStatus; }); Object.defineProperty(m,'__byId',{value:byId,enumerable:false}); return m; }); }
+  certStatusForCompletion(completionId){ if(completionId==null||completionId==='') return null; return this.certStatusMap().__byId[String(completionId)]||null; }
   certStatusAt(staffId,code,date){ const k=this.completionKey(staffId,code,date); const m=this.certStatusMap(); return m[k]||(this.issuesCertificate(code)?'generated':'none'); }
   // One-time normalization of persisted records to the corrected certificate status model.
   //  (1) Clears leftover admin overrides that DISABLED certificate generation on a default
@@ -10813,7 +10901,7 @@ class Component extends DCLogic {
     return {docs:d,changed,audits};
   }
   // ---- Missing/Error review modal ----
-  openCertReview(key){ const rec=this.buildCompletionRecords().find(r=>r.key===key); if(!rec){ this.toast('Record not found.'); return; } this.setState({modal:{type:'certreview', rec, action:rec.recommendedActionKey||'generated', reason:''}}); }
+  openCertReview(key){ const all=this.buildCompletionRecords().filter(r=>r.key===key); const rec=all.find(r=>!r.voided)||all[0]; if(!rec){ this.toast('Record not found.'); return; } this.setState({modal:{type:'certreview', rec, action:rec.recommendedActionKey||'generated', reason:''}}); }
   applyCertResolution(){
     const cu=this.state.currentUser; if(!cu||cu.role!=='admin'){ this.toast('Only administrators can resolve certificate records.'); return; }
     const m=this.state.modal; if(!m||m.type!=='certreview'||!m.rec){ return; }
@@ -10873,7 +10961,7 @@ class Component extends DCLogic {
     return '';
   }
   trainingImportDisplayTitle(rawTitle,code,headerLabel){ const a=this.trainingImportKnownAlias(rawTitle,'',headerLabel); if(a)return a.title; const t=String(rawTitle||headerLabel||'').trim(); return t||this.documentCourseName(code)||code; }
-  trainingImportExpiration(raw,st,code,date,legacy){ const x=String(raw||'').trim(); if(x){ if(/^(no\s*expiration|never\s*expires?|none|n\/a)$/i.test(x))return 'No expiration'; return this.importDate(x)||''; } if(legacy)return 'No expiration'; return this.calcExpiry(code,date)||'No expiration'; }
+  trainingImportExpiration(raw,st,code,date,legacy){ const x=String(raw||'').trim(); if(x){ if(/^(no\s*expiration|never\s*expires?|none|n\/a)$/i.test(x))return 'No expiration'; return this.importDate(x)||''; } if(legacy)return 'No expiration'; return this.calcExpiry(code,date,st)||'No expiration'; }
   trainingImportFindHeaderRow(matrix){ for(let i=0;i<Math.min(25,(matrix||[]).length);i++){const H=this.trainingImportHeaderMap(matrix[i]||[]);if(H.staffId>=0)return i;} return -1; }
   trainingImportDateColumnScore(rows,idx){ let valid=0,nonblank=0; (rows||[]).slice(0,250).forEach(r=>{const x=String((r||[])[idx]??'').trim();if(!x)return;nonblank++;if(this.importDate(x))valid++;}); return {valid,nonblank}; }
   trainingImportSingleCourseSpec(head,rows,H,fileName){
@@ -14325,14 +14413,12 @@ class Component extends DCLogic {
   openCert(code){ this.setState({modal:{type:'cert',code}}); }
   openCertFor(staffId,code,completionId,date){
     if(!this.canViewStaffMember(this.staffById(staffId)||{id:staffId})){ this.toast('You do not have permission to access this certificate.'); return; }
-    const comps=((this.state.docs&&this.state.docs.completions)||[]), sid=String(staffId), wanted=String(code||'').toUpperCase();
-    let cm=completionId?comps.find(x=>String(x.id!=null?x.id:(x.completionId!=null?x.completionId:x.completion_id))===String(completionId)):null;
-    if(!cm){
-      const matches=comps.filter(x=>this.completionStaffId(x)===sid&&this.completionMatchesCode(x,wanted)&&this.completionAddToTranscript(x)&&!x.voided);
-      const exactDate=date?matches.filter(x=>String(this.completionDate(x)||'')===String(date)):[];
-      cm=exactDate.slice(-1)[0]||matches.filter(x=>this.completionCertFlag(x)===true).slice(-1)[0]||matches.slice(-1)[0]||null;
-    }
-    this.setState({modal:{type:'cert',staffId,code:wanted||code,completionId:cm&&(cm.id!=null?cm.id:(cm.completionId!=null?cm.completionId:cm.completion_id)),completionDate:date||(cm&&this.completionDate(cm))||''}});
+    const sid=String(staffId), wanted=String(code||'').toUpperCase(), st=this.staffById(staffId);
+    let cm=this.resolveCompletion(sid,wanted,date,completionId);
+    if(!cm&&!date){ const vi=this.voidIndex(); const matches=this.completionsForStaff(sid).filter(x=>this.completionMatchesCode(x,wanted)&&this.completionAddToTranscript(x)&&!x.voided&&!this.isCompletionVoided(x,vi)); cm=matches.filter(x=>this.completionCertFlag(x)===true).slice(-1)[0]||matches.slice(-1)[0]||null; }
+    const d=date||(cm&&this.completionDate(cm))||(st&&st.dt&&st.dt[wanted])||'';
+    if(st){ const why=this.certificateBlockReason(st,wanted,d,cm); if(why){ this.toast(why); return; } }
+    this.setState({modal:{type:'cert',staffId,code:wanted||code,completionId:cm?this.completionIdValue(cm):null,completionDate:d}});
   }
   buildStaffCourses(st){ const nurse=this.isNurse(st); const sdch=!nurse&&this.isSDCH(st); const baseOrder=nurse?['O1','O2','O3','EPP','ART','RNORI','RNPLAN','PONS']:(sdch?['SDCH1','SDCH2','ART','O1','O2','O3']:['O1','O2','O3','ART','EPP','PA','CPR','FA','SCIPR','AMAP','AMAPP','DYS','DIAB','DIABP','DD','CB','CBP','TF','TFP','WCO','WCI']); const order=[...baseOrder,...this.rptComplianceCodes().filter(c=>!baseOrder.includes(c)),...this.locAddedCodesFor(st).filter(c=>!baseOrder.includes(c))]; const ONLINE=new Set(this.masterCourseCatalog().filter(c=>c.online).map(c=>c.code)); const NMAP={r:'red',o:'orange',y:'yellow',g:'green',w:'white'}; return order.filter(c=>this.requiredFor(st,c)||(st.dt&&st.dt[c])).map(c=>{ let l=this.effStatus(st,c); if(l==='na') l='w'; if(l==='info') l='g'; const dt=(st.dt&&st.dt[c])||'\u2014'; const status=NMAP[l]||'white'; const hasCert=(l==='g'||l==='y'||l==='o')&&dt!=='\u2014'; const info= l==='r'?'Action needed':(l==='g'?('Completed '+(dt!=='\u2014'?dt:'')):(l==='w'?'Not yet due / not required':'Due soon')); const expires=this.expirationFor(st,c,dt); return {code:c,name:(this.COURSE_NAME[c]||c),cat:st.pos||'',fmt:ONLINE.has(c)?'Online':'In-person',status,completed:dt,expires,online:ONLINE.has(c),hasCert,info}; }); }
   // Merge persisted completion records (docs.completions) into a working copy of the staff
@@ -14364,19 +14450,15 @@ class Component extends DCLogic {
   completionCertFlag(c){ if(!c)return null; if(c.certGenerated!=null)return !!c.certGenerated; if(c.certificate_generated!=null)return !!c.certificate_generated; if(c.issueCertificate!=null)return !!c.issueCertificate; if(c.issue_certificate!=null)return !!c.issue_certificate; const s=String(c.certificateStatus||c.certificate_status||'').toLowerCase(); if(s==='generated'||s==='internal')return true; if(s==='missing'||s==='error'||s==='none'||s==='voided')return false; return null; }
   completionIdValue(c){ return c&&(c.id!=null?c.id:(c.completionId!=null?c.completionId:c.completion_id)); }
   completionExpires(c){ return (c&&(c.expires||c.expiresAt||c.expires_at))||''; }
+  // The transcript's working staff record comes from the same replay as compliance (latest
+  // non-voided, non-future completion wins; only explicit expiries become overrides; satisfied
+  // requirements and alternates expand), limited to this person's transcript-eligible records.
   transcriptStaff(stIn){
     if(!stIn) return stIn;
-    const vk=this.voidKeySet(), sid=String(stIn.id);
-    const comps=((this.state.docs&&this.state.docs.completions)||[]).filter(x=>{
-      if(x.referenceSuperseded===true||this.completionStaffId(x)!==sid||!this.completionAddToTranscript(x))return false;
-      const isVideo=!!this.completionVideoId(x); if(isVideo&&!this.completionCountsTowardCompliance(x))return false;
-      const code=this.completionComplianceCode(x),date=this.completionDate(x); if(!code||!date||date==='—')return false;
-      return !vk.has(this.completionKey(stIn.id,code,date));
-    });
-    if(!comps.length)return stIn;
-    const rec={...(stIn.rec||{})},dt={...(stIn.dt||{})},expOverride={...(stIn.expOverride||{})};
-    comps.forEach(x=>{ const primary=this.completionComplianceCode(x),date=this.completionDate(x),sats=(x.satisfiedRequirements||x.satisfied_requirements||[]); const codes=(Array.isArray(sats)&&sats.length)?sats:[primary]; codes.forEach(rawCode=>{const code=String(rawCode||'').toUpperCase();if(!code||!date||date==='—')return;const nv=this.compDateVal(date),cv=this.compDateVal(dt[code]);if(!dt[code]||(nv&&nv>=cv)){dt[code]=date;const exp=this.completionExpires(x);if(exp&&exp!=='No expiration'&&exp!=='—')expOverride[code]=exp;else if(exp==='No expiration')delete expOverride[code];}if(!rec[code]||rec[code]==='w'||(nv&&nv>=cv))rec[code]='g';}); });
-    return {...stIn,rec,dt,expOverride};
+    const sid=String(stIn.id), docs=this.state.docs||{};
+    const comps=(docs.completions||[]).filter(x=>this.completionStaffId(x)===sid&&this.completionAddToTranscript(x));
+    if(!comps.length) return stIn;
+    return this.applyCompletionsToRoster([stIn],{...docs,completions:comps})[0];
   }
   // Merge persisted completion records into the LIVE roster at boot so online-course /
   // independent-session / external-cert completions keep driving COMPLIANCE (not just the
@@ -14417,11 +14499,11 @@ class Component extends DCLogic {
   //    the newer completion falls back to it instead of erasing the history.
   applyCompletionsToRoster(roster, docs){
     const comps=(docs&&docs.completions)||[]; if(!comps.length) return roster;
-    const vk=new Set(((docs&&docs.completionVoids)||[]).map(v=>v.key));
+    const vi=this.voidIndex(docs),vk=vi.keys; // vk: key-only voids; id-targeted voids match one record
     const todayVal=this._todayVal();
     const byStaff={};
     comps.forEach(x=>{ if(x.referenceSuperseded===true) return; const sid=this.completionStaffId(x),isNewVideo=!!this.completionVideoId(x),code=this.completionComplianceCode(x),date=this.completionDate(x),explicitNonCompliance=(x.countsTowardCompliance===false||x.counts_toward_compliance===false); if(explicitNonCompliance)return; if(isNewVideo && !(this.completionCountsTowardCompliance(x)&&code)) return; if(!code||!date||date==='\u2014'||!sid)return;
-      if(vk.has(this.completionKey(sid,code,date))) return;
+      if(this.isCompletionVoided(x,vi)) return;
       const dv=this.compDateVal(date); if(!dv||dv>todayVal) return;
       const expires=this.completionExplicitExpiry(x);
       this.completionRosterCodes(x).forEach(({code:k,via})=>{ if(vk.has(this.completionKey(sid,k,date))||(via!==k&&vk.has(this.completionKey(sid,via,date)))) return; (byStaff[sid]=byStaff[sid]||[]).push({code:k,date,expires:via===k?expires:''}); }); });
@@ -14452,29 +14534,36 @@ class Component extends DCLogic {
     const order = nurse ? ['O1','O2','O3','EPP','ART','RNORI','RNPLAN','PONS'] : (sdch ? ['SDCH1','SDCH2','ART','O1','O2','O3'] : ['O1','O2','O3','ART','EPP','PA','CPR','FA','SCIPR','DYS','DIAB','DIABP','AMAP','AMAPP','CB','CBP','TF','TFP','DD','WCO','WCI']);
     const completed=(c)=> !!(st.dt && st.dt[c] && st.dt[c]!=='—');
     const extras=Object.keys(st.dt||{}).filter(c=>completed(c) && order.indexOf(c)<0);
+    // Each row carries the completion record it stands for, so its expiry, certificate number and
+    // title come from that record rather than from whichever record is newest for the course.
+    const _used=new Set(),_vi=this.voidIndex();
     const _baseRows=order.concat(extras).filter(completed).map(c=>{
-      const l=this.effStatus(st,c); const m=this.meta(this.letterKey(l==='na'?'w':l)); const comp=st.dt[c]; const exp=this.expirationFor(st,c,comp);
-      return {name:this.documentCourseName(c),code:c,completed:comp,expires:exp,statusLabel:m.label,fg:m.fg,bg:m.bg,classification:(this.isComplianceCourse(c)?'Mandatory':'Professional Development'),isMandatory:this.isComplianceCourse(c),hasCert:this.issuesCertificate(c)};
+      const l=this.effStatus(st,c); const m=this.meta(this.letterKey(l==='na'?'w':l)); const comp=st.dt[c]; let cm=this.resolveCompletion(sid,c,comp); if(cm&&(cm.voided||this.isCompletionVoided(cm,_vi)))cm=null; const exp=this.expirationFor(st,c,comp,cm); const cid=cm?this.completionIdValue(cm):null; if(cid!=null)_used.add(String(cid));
+      return {name:this.documentCourseName(c,cm),code:c,completed:comp,expires:exp,statusLabel:m.label,fg:m.fg,bg:m.bg,classification:(this.isComplianceCourse(c)?'Mandatory':'Professional Development'),isMandatory:this.isComplianceCourse(c),hasCert:this.issuesCertificate(c),certId:this.certIdFor(st,c,comp,cm),completionId:cid,source:cm?(cm.source||cm.completion_origin||cm.origin||'LMS'):''};
     });
     const _seen=new Set(_baseRows.map(r=>String(r.code).toUpperCase()+'|'+r.completed));
-    const _voids=this.voidKeySet(),_docComps=((this.state.docs&&this.state.docs.completions)||[]),_ss=this.SS(),_shared=(_ss&&_ss.vtCompletions&&_ss.vtCompletions())||[],_docIds=new Set(_docComps.map(c=>String(this.completionIdValue(c)||'')).filter(Boolean));
-    const _allComps=[..._docComps,..._shared.filter(c=>{const id=String(this.completionIdValue(c)||'');return !id||!_docIds.has(id);})];
+    const _allComps=this.completionsForStaff(sid);
     const _extra=_allComps.filter(c=>{
-      if(c.referenceSuperseded===true||this.completionStaffId(c)!==sid||!this.completionAddToTranscript(c)||c.voided)return false;
-      const code=this.completionComplianceCode(c)||this.completionCode(c),date=this.completionDate(c); if(!date||date==='—')return false;
-      return !_voids.has(this.completionKey(stIn.id,code,date));
+      if(c.referenceSuperseded===true||!this.completionAddToTranscript(c)||c.voided)return false;
+      const date=this.completionDate(c); if(!date||date==='—')return false;
+      return !this.isCompletionVoided(c,_vi);
     });
     _extra.forEach(c=>{
-      const code=this.completionCode(c)||('VT_'+String(this.completionVideoId(c)||'').replace(/[^A-Za-z0-9]/g,'').toUpperCase()); const done=this.completionDate(c); if(!code||!done||done==='—')return; const key=String(code).toUpperCase()+'|'+done; if(_seen.has(key))return; _seen.add(key);
-      const mandatory=this.completionCountsTowardCompliance(c)||this.isComplianceCourse(code); const cls=c.classification||(mandatory?'Mandatory':'Professional Development'); const exp=this.completionExpires(c)||(mandatory?this.expirationFor(st,code,done):'No expiration'); const statusLabel=mandatory?'Completed':'Completed — '+cls; const certFlag=this.completionCertFlag(c);
-      _baseRows.push({name:this.documentCourseName(code,c),code,completed:done,expires:exp,statusLabel,fg:mandatory?'#1F9D55':'#2F5496',bg:mandatory?'#E4F6EB':'#EEF3FF',classification:cls,isMandatory:mandatory,hasCert:certFlag===true,certId:c.certId||c.certificate_id||'',completionId:this.completionIdValue(c),source:c.source||c.completion_origin||c.origin||'LMS'});
+      const cid=this.completionIdValue(c); if(cid!=null&&_used.has(String(cid)))return;
+      const code=this.completionCode(c)||('VT_'+String(this.completionVideoId(c)||'').replace(/[^A-Za-z0-9]/g,'').toUpperCase()); const done=this.completionDate(c); if(!code||!done||done==='—')return; const key=String(code).toUpperCase()+'|'+done; if(_seen.has(key))return;
+      // A multi-requirement card (EMT: CPR + FA, incl. legacy "CPR+FA" records) already shown on
+      // each requirement's own row must not add a combined row.
+      const rc=this.completionRosterCodes(c).filter(x=>x.via===x.code); if(rc.length>1&&rc.every(x=>_seen.has(x.code+'|'+done)))return;
+      _seen.add(key);
+      const mandatory=this.completionCountsTowardCompliance(c)||this.isComplianceCourse(code); const cls=c.classification||(mandatory?'Mandatory':'Professional Development'); const exp=mandatory?this.expirationFor(st,code,done,c):(this.completionExpires(c)||'No expiration'); const statusLabel=mandatory?'Completed':'Completed — '+cls; const certFlag=this.completionCertFlag(c);
+      _baseRows.push({name:this.documentCourseName(code,c),code,completed:done,expires:exp,statusLabel,fg:mandatory?'#1F9D55':'#2F5496',bg:mandatory?'#E4F6EB':'#EEF3FF',classification:cls,isMandatory:mandatory,hasCert:certFlag===true,certId:this.certIdFor(st,code,done,c),completionId:cid,source:c.source||c.completion_origin||c.origin||'LMS'});
     });
     return _baseRows.map(r=>{
-      const rawCls=r.classification||(r.isMandatory===false?'Elective':'Mandatory'), compRec=r.completionId?this.completionRecordById(r.completionId):null;
+      const rawCls=r.classification||(r.isMandatory===false?'Elective':'Mandatory'), compRec=r.completionId!=null?this.completionRecordById(r.completionId):null;
       const legacy=this.isLegacyCourseCode(r.code,compRec||r), cls=legacy?'Legacy Course':rawCls, elective=cls!=='Mandatory'&&!r.isMandatory;
-      const certStatus=this.certStatusAt(stIn.id,r.code,r.completed), explicit=this.completionCertFlag(compRec);
+      const certStatus=(r.completionId!=null&&this.certStatusForCompletion(r.completionId))||this.certStatusAt(stIn.id,r.code,r.completed), explicit=this.completionCertFlag(compRec);
       const hasCert=certStatus==='generated'||certStatus==='internal'||(certStatus!=='voided'&&certStatus!=='missing'&&explicit===true);
-      return {...r,name:this.documentCourseName(r.code,r),classification:cls,classBg:legacy?'#EEF1F8':(elective?'#EEF3FF':'#E4F6EB'),classFg:legacy?'#667085':(elective?'#2F5496':'#1F8A4C'),isMandatory:legacy?false:!elective,legacy,certStatus,hasCert};
+      return {...r,name:this.documentCourseName(r.code,compRec||r),classification:cls,classBg:legacy?'#EEF1F8':(elective?'#EEF3FF':'#E4F6EB'),classFg:legacy?'#667085':(elective?'#2F5496':'#1F8A4C'),isMandatory:legacy?false:!elective,legacy,certStatus,hasCert};
     });
   }
   addDaysStr(mdy,days){ const p=String(mdy).split('/'); const yy=+p[2]; const d=new Date(this._yr(yy), +p[0]-1, +p[1]); d.setDate(d.getDate()+days); return (d.getMonth()+1)+'/'+d.getDate()+'/'+String(d.getFullYear()).slice(2); }
@@ -14484,13 +14573,18 @@ class Component extends DCLogic {
   // Persists through saveDocs, dedups by staff+code+version, updates roster/compliance, logs audit.
   postOnlineCompletion({staffId, code, displayTitle, date, expires, version, courseId, certId}){
     const sid=staffId; const comps=(this.state.docs.completions||[]);
-    const existsIdx=comps.findIndex(x=>x.staffId===sid && (x.code===code||x.complianceCode===code||x.course===code) && (version?((x.version||1)===version):true) && (x.source||'').toLowerCase().indexOf('online')>=0);
+    const same=x=>String(x.staffId)===String(sid) && (x.code===code||x.complianceCode===code||x.course===code) && (version?((x.version||1)===version):true) && (x.source||'').toLowerCase().indexOf('online')>=0;
+    // Dedupe only a double-submit (same course/version/date); a retake is appended with its own
+    // certificate number so the earlier completion keeps its history and certificate.
+    const existsIdx=comps.findIndex(x=>same(x)&&x.date===date), prior=comps.filter(same), usedCert=new Set(comps.map(x=>x.certId).filter(Boolean));
     const certGen=this.issuesCertificate(code);
-    const rec={ id:(existsIdx>=0?comps[existsIdx].id:('oc'+Date.now())), staffId:sid, code, course:code, complianceCode:code, displayCourseTitle:displayTitle, courseTitle:displayTitle, date, expires:expires||'No expiration', version:version||undefined, courseId:courseId||undefined, certId:certId||undefined, certGenerated:certGen, source:'Online course completion' };
+    let cid=existsIdx>=0?(comps[existsIdx].certId||certId):certId; if(cid&&existsIdx<0&&usedCert.has(cid)) cid=cid+'-R'+(prior.length+1);
+    const st=this.staffById(sid);
+    // No expiry supplied -> computed by the renewal rule (not an override).
+    const rec={ id:(existsIdx>=0?comps[existsIdx].id:('oc'+Date.now())), staffId:sid, code, course:code, complianceCode:code, displayCourseTitle:displayTitle, courseTitle:displayTitle, date, expires:expires||this.expiryDateFor(st,code,date), expOverride:!!expires, version:version||undefined, courseId:courseId||undefined, certId:cid||undefined, certGenerated:certGen, source:'Online course completion' };
     const newComps = existsIdx>=0 ? comps.map((x,i)=>i===existsIdx?{...x,...rec}:x) : [...comps, rec];
     const docs={...this.state.docs, completions:newComps};
-    const st=this.staffById(sid);
-    const roster=this.state.roster.map(r=> r.id===sid && code ? {...r, rec:{...r.rec,[code]:'g'}, dt:{...r.dt,[code]:date}} : r);
+    const roster=this.applyCompletionsToRoster(this.applyVoidsToRoster(this.state.roster,docs),docs);
     this.saveDocs(docs); this.setState({roster});
     // Cross-portal sync: mirror into the shared store (used by the Staff Training Portal).
     try{ const SS=window.HASCStore; const _cid=courseId||null; if(SS&&_cid){ SS.completeCourse(sid, _cid, {version:version||1, source:'online_course'}); } }catch(e){}
@@ -14745,8 +14839,11 @@ class Component extends DCLogic {
     if(present!=='absent'&&typeof pass!=='boolean'){this.toast('Record Pass or Fail for this attendee — choosing a result also marks them present.');return false;}
     const before={present:sess.att&&sess.att[staffId],pass:sess.pass&&sess.pass[staffId]},nowPass=present!=='absent'&&pass===true,key=this.completionKey(staffId,code,dshort);
     let completions=(this.state.docs.completions||[]).slice(),voids=(this.state.docs.completionVoids||[]).slice(); const existing=completions.find(c=>c.sessionId===sid&&String(c.staffId)===String(staffId));
-    if(nowPass){voids=voids.filter(v=>v.key!==key);if(!existing)completions.push({id:'cc'+Date.now(),staffId:String(staffId),course:code,complianceCode:code,displayCourseTitle:sess.title||this.COURSE_NAME[code]||code,sessionTitle:sess.title,sessionId:sid,date:dshort,completedAt:(this.sessionDateObj(sess)||new Date()).toISOString(),source:'In-person session (corrected)',certGenerated:this.issuesCertificate(code),by:'admin',correctionReason:reason});else completions=completions.map(c=>c===existing?{...c,voided:false,voidedReason:null}:c);}
-    else if(!voids.some(v=>v.key===key)){const stamp=this.staffChangeStamp();voids.unshift({voidId:'vdc'+stamp.t,key,staffId:String(staffId),staffName:st?st.name:String(staffId),code,course:this.courseLabel(code),completionDate:dshort,reason:String(reason).trim(),voidedBy:(this.state.currentUser&&this.state.currentUser.name)||'Admin',voidDate:stamp.ts,t:stamp.t,sessionId:sid,certVoided:this.issuesCertificate(code)});}
+    // Void history is append-only: a correction back to Pass appends a reinstatement for the void(s)
+    // this session's correction created, instead of deleting them (or anyone else's void).
+    const cidEx=existing?String(this.completionIdValue(existing)||''):'',active=this.activeVoids({completionVoids:voids});let reinstated=0;
+    if(nowPass){const stamp=this.staffChangeStamp();active.filter(v=>v.key===key&&(v.sessionId===sid||(cidEx&&String(v.completionId||'')===cidEx))).forEach((v,i)=>{reinstated++;voids.unshift({type:'reinstated',voidId:'rs'+stamp.t+'_'+i,reinstatesVoidId:v.voidId,staffId:String(staffId),code,completionDate:dshort,completionId:v.completionId||'',sessionId:sid,reason:String(reason).trim(),reinstatedBy:(this.state.currentUser&&this.state.currentUser.name)||'Admin',date:stamp.ts,t:stamp.t});});if(!existing)completions.push({id:'cc'+Date.now(),staffId:String(staffId),course:code,complianceCode:code,displayCourseTitle:sess.title||this.COURSE_NAME[code]||code,sessionTitle:sess.title,sessionId:sid,date:dshort,completedAt:(this.sessionDateObj(sess)||new Date()).toISOString(),source:'In-person session (corrected)',certGenerated:this.issuesCertificate(code),by:'admin',correctionReason:reason});else completions=completions.map(c=>c===existing?{...c,voided:false,voidedReason:null}:c);}
+    else if(!active.some(v=>v.key===key&&(!v.completionId||!cidEx||String(v.completionId)===cidEx))){const stamp=this.staffChangeStamp();voids.unshift({voidId:'vdc'+stamp.t,key,completionId:cidEx,staffId:String(staffId),staffName:st?st.name:String(staffId),code,course:this.courseLabel(code),completionDate:dshort,reason:String(reason).trim(),voidedBy:(this.state.currentUser&&this.state.currentUser.name)||'Admin',voidDate:stamp.ts,t:stamp.t,sessionId:sid,certVoided:this.issuesCertificate(code)});}
     const docs={...this.state.docs,completions,completionVoids:voids};
     let roster=this.applyCompletionsToRoster(this.applyVoidsToRoster(this.state.roster,docs),docs);
     const outcome=nowPass?'completed':(present==='absent'?'no_show':'failed');
@@ -14754,6 +14851,7 @@ class Component extends DCLogic {
     const requests=this.state.requests.map(r=>r.sessionId===sid&&String(r.staffId)===String(staffId)?{...r,status:outcome,updatedAt:new Date().toISOString()}:r);
     this.saveDocs(docs); this.setState({sessions,requests,roster});
     this._mirrorToService('attendance.correct',S=>S.correctAttendance(sid,String(staffId),{present:present!=='absent',result:present==='absent'?'no_show':(pass?'pass':'fail')},String(reason).trim(),(this.state.currentUser&&this.state.currentUser.name)||'Admin'));
+    if(reinstated)this.logAudit('Completion reinstated',{staff:st?st.name:staffId,target:(sess.title||code)+' ('+code+')',prev:'Voided',next:'Reinstated · '+dshort,notes:String(reason).trim(),sev:'Compliance',relatedId:sid});
     this.logAudit('Attendance correction',{staff:st?st.name:staffId,target:sess.title||code,prev:JSON.stringify(before),next:JSON.stringify({present,pass,outcome}),notes:String(reason).trim(),sev:'Critical',relatedId:sid});this.toast('Correction applied — attendance, completion, transcript, certificate and compliance views recalculated.');return true;
   }
 
@@ -16197,8 +16295,7 @@ class Component extends DCLogic {
     
     if(this.state.modal&&this.state.modal.type==='cert'){ showCert=true; const md=this.state.modal;
       // The certificate card is a view of a staff record, so it gets the same guard as printing it.
-      if(md.staffId&&!this.canViewStaffMember(this.staffById(md.staffId)||{id:md.staffId})){ showCert=false; cert=null; }
-      else if(md.staffId){ const st=this.state.roster.find(x=>x.id===md.staffId)||{name:md.staffId,dt:{}}; const nm=st.name.includes(',')?st.name.split(',').map(x=>x.trim()).reverse().join(' '):st.name; const cm=md.completionId?((this.state.docs.completions||[]).find(x=>x.id===md.completionId)||((this.SS().vtCompletions&&this.SS().vtCompletions())||[]).find(x=>x.id===md.completionId)):null; const completed=cm?(cm.date||new Date(cm.officialCompletionAt||cm.official_completion_at||cm.completed_at).toLocaleDateString('en-US')):(md.completionDate||((st.dt&&st.dt[md.code])||'\u2014')); cert={staffName:nm,name:this.documentCourseName(md.code,cm),completed,code:md.code,staffId:st.id,completionRec:cm,auditLine:cm?['Course Classification: '+(cm.classification||'Professional Development'),'Completion Source: '+(cm.source||cm.completion_origin||'LMS'),(cm.certId||cm.certificate_id)?('Certificate ID: '+(cm.certId||cm.certificate_id)):''].filter(Boolean).join(' | '):this.certAuditLine(st.id,md.code)}; }
+      if(md.staffId&&!this.canViewStaffMember(this.staffById(md.staffId)||{id:md.staffId})){ showCert=false; cert=null; }else if(md.staffId){ const st=this.state.roster.find(x=>x.id===md.staffId)||{name:md.staffId,dt:{}}; const nm=st.name.includes(',')?st.name.split(',').map(x=>x.trim()).reverse().join(' '):st.name; const cm=this.resolveCompletion(md.staffId,md.code,md.completionDate||((st.dt&&st.dt[md.code])||''),md.completionId); const completed=cm?(cm.date||new Date(cm.officialCompletionAt||cm.official_completion_at||cm.completed_at).toLocaleDateString('en-US')):(md.completionDate||((st.dt&&st.dt[md.code])||'\u2014')); cert={staffName:nm,name:this.documentCourseName(md.code,cm),completed,code:md.code,staffId:st.id,completionRec:cm,auditLine:cm?['Course Classification: '+(cm.classification||'Professional Development'),'Completion Source: '+(cm.source||cm.completion_origin||'LMS'),(cm.certId||cm.certificate_id)?('Certificate ID: '+(cm.certId||cm.certificate_id)):''].filter(Boolean).join(' | '):this.certAuditLine(st.id,md.code)}; }
       else { const st=_meStaff; if(st){ const nm=st.name.includes(',')?st.name.split(',').map(x=>x.trim()).reverse().join(' '):st.name; cert={staffName:nm,name:this.documentCourseName(md.code),completed:(st.dt&&st.dt[md.code])||'\u2014',code:md.code,staffId:st.id,completionRec:null,auditLine:this.certAuditLine(st.id,md.code)}; } else { showCert=false; cert=null; } } }
       // The on-screen card resolves its facts and type scale through the same helpers the
       // printed certificate uses, so the two can never show a different date or certificate ID.
@@ -16383,7 +16480,7 @@ class Component extends DCLogic {
       drivingLabel: r.driving?'Yes':(r.voided?'\u2014':'No'),
       sessLabel: r.sessionId?(r.sessionId+(r.sessionTitle?(' \u00b7 '+r.sessionTitle):'')):'\u2014',
       onView:()=>this.openCertFor(r.staffId, r.code),
-      onVoid:()=>this.openVoidModal(r.key),
+      onVoid:()=>this.openVoidModal(r.key,r.completionId),
       voidedMeta: r.voidEntry?('Voided '+r.voidEntry.voidDate+' by '+r.voidEntry.voidedBy+' \u00b7 '+r.voidEntry.reason):'' }; };
     let vRows=[], vStats={total:0,active:0,expired:0,voided:0}, vLocOpts=[], vCourseOpts=[], vInstrOpts=[], vCapped=false, vCapN=0;
     let vStaffPick=[], vSelRec=null, vSelMeta='', vSelGroups=[], vSelEmpty=false, vfSelStaff=this.state.vfSelStaff;

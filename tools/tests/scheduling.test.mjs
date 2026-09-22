@@ -186,7 +186,7 @@ await login(page, 'admin');
     out.presentNoResult = L.correctCertifiedAttendance('sch07past', st[1], { present: 'present' }, 'was there');
     out.passOk = L.correctCertifiedAttendance('sch07past', st[1], { pass: true }, 'was there and passed'); await wait(100);
     const s = L.state.sessions.find(x => x.id === 'sch07past'); out.st1 = { att: s.att[st[1]], result: (s.roster.find(x => String(x.staffId) === st[1]) || {}).result };
-    out.voidsForSt1 = (L.state.docs.completionVoids || []).filter(v => v.sessionId === 'sch07past' && String(v.staffId) === st[1]).length;
+    out.voidsForSt1 = (L.activeVoids ? L.activeVoids(L.state.docs) : (L.state.docs.completionVoids || [])).filter(v => v.sessionId === 'sch07past' && String(v.staffId) === st[1]).length;
     return out; }, fx);
   check('SCH-11a', 'roster result follows a post-certification correction', r.afterAbsent === 'no_show', r);
   check('SCH-11b', 'absent → present needs a result; recording Pass marks present/completed', r.presentNoResult === false && r.passOk === true && r.st1?.att === 'present' && r.st1?.result === 'completed' && r.voidsForSt1 === 0, r); }
