@@ -8030,21 +8030,17 @@ class Component extends DCLogic {
     if(iv&&dt){ const rs=this.statusFromDate(dt,iv); if(rs) l=rs; } if(l==='w'&&this.GRACE_COURSES.includes(code)){ const dh=this.daysSinceHire(staff); const gw=this.effGraceWindow(staff,code); return (dh!=null&&dh<=gw)?'y':'r'; } if(l==='w'&&(this.isNurse(staff)||this.isSDCH(staff))) l='r';
     // A REQUIRED course with no qualifying record is never compliant: it is due by its initial due
     // date (see initialDueInfo) and overdue after it. White is kept only for "not yet due".
-    if(l==='w'&&!dt&&this.missingRequiredEnforced()){ const x=this.initialDueInfo(staff,code); if(!x.due) return 'r'; const left=this.daysUntil(x.due); if(left==null||left<0) return 'r'; if(left<=30) return 'o'; if(left<=90) return 'y'; return 'w'; }
+    if(l==='w'&&!dt&&this.missingRequiredEnforced()){ const x=this.initialDueInfo(staff,code); if(!x.due) return 'y'; const left=this.daysUntil(x.due); if(left==null||left<0) return 'r'; if(left<=30) return 'o'; if(left<=90) return 'y'; return 'w'; }
     return l; }
   // Admin-configurable (docs.complianceRules.missingRequired): 'enforce' (default) counts a required
   // course with no record as due/overdue; 'legacy' restores the old behavior of leaving it white.
   complianceRules(){ return (this.state&&this.state.docs&&this.state.docs.complianceRules)||{}; }
   missingRequiredEnforced(){ return this.complianceRules().missingRequired!=='legacy'; }
-  // Pourings / annual competencies are first due one renewal interval after their parent training.
-  INITIAL_DUE_PARENT={AMAPP:'AMAP',DIABP:'DIAB',CBP:'CB',TFP:'TF',SCIPR:'SCIP2'};
-  // Initial due date for a required course that has never been completed. Deterministic and
-  // explainable: parent-training date + renewal interval for pourings / SCIP Recert, otherwise
-  // hire date + due window (location dueDays > Course Information initialDueDays > 90 days).
+  // Initial due date for a required course that has never been completed (Training Dept policy,
+  // 2026-09-22): a course required for the staff member's role is overdue only when it was not
+  // completed within the due window after hire. Window: location dueDays > Course Information
+  // initialDueDays > 90 days. Deterministic and explainable (see ruleDiagnostic).
   initialDueInfo(staff,code){
-    const parent=this.INITIAL_DUE_PARENT[code];
-    const pd=parent?(this.parseMDY(staff&&staff.dt&&staff.dt[parent])||(parent==='SCIP2'?this.parseMDY(staff&&staff.dt&&staff.dt.SCIP1):null)):null;
-    if(pd){ const iv=this.effInterval(staff,code)||365; const due=new Date(pd); due.setDate(due.getDate()+iv); return {due,anchor:pd,basis:'parent',parent,days:iv}; }
     const h=this.parseMDY(staff&&staff.h); if(!h) return {due:null,anchor:null,basis:'none',days:0};
     const ov=this.locOverrideFor(staff,code); const ci=this.courseInfoFor(code);
     const days=(ov&&ov.dueDays)?+ov.dueDays:((+ci.initialDueDays>0)?+ci.initialDueDays:90);
@@ -16974,7 +16970,7 @@ onCiUseStd:()=>this.setState({ciDesc:this.courseSheetSummaryDefault(this.state.c
     if(eff&&!dt&&code!=='ART'&&!inGrace&&status!=='g'&&status!=='na'&&this.missingRequiredEnforced()){ initDue=this.initialDueInfo(staff,code);
       const dueStr=initDue.due?this.formatShortDate(initDue.due):'';
       const basis=initDue.basis==='parent'?(initDue.days+' days after '+this.courseLabel(initDue.parent)+' ('+this.formatMDY(initDue.anchor)+')'):(initDue.basis==='hire'?(initDue.days+' days after hire ('+this.formatMDY(initDue.anchor)+')'):'');
-      why= !initDue.due ? 'Required, and no completion is on record. No hire date or prerequisite date is available to set an initial due date, so it counts as missing.'
+      why= !initDue.due ? 'Required, and no completion is on record. There is no hire date on file, so an initial due date cannot be set; it is shown as due (not overdue) until the hire date is corrected.'
         : (status==='r' ? ('Required, and no completion is on record. The initial due date was '+dueStr+' \u2014 '+basis+'.') : ('Required, and not yet completed. Initial due date '+dueStr+' \u2014 '+basis+'.'));
     }
     return { code, courseName:this.courseLabel(code), staffName:staff.name||'(staff)', staffPos:staff.pos||'\u2014', staffLoc:this.canonicalLocName(staff), pathway,
