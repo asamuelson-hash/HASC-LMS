@@ -8301,7 +8301,7 @@ class Component extends DCLogic {
     if(s.includes(',')){ const i=s.indexOf(','), sl=s.slice(0,i).trim(), sf=s.slice(i+1).trim(); return sl===last&&(sf===first||sf.startsWith(first+' ')); }
     return s===first+' '+last||(s.startsWith(first+' ')&&s.endsWith(' '+last)); }
   deriveEmail(name){ const p=this.nameParts(name); if(!p.first||!p.last) return ''; return ((p.first[0]||'')+p.last).toLowerCase().replace(/[^a-z]/g,'')+'@hasccenter.org'; }
-  savePwSetup(){ const s=this.state.pwSetup; if(!s) return; const cu=this.state.currentUser;
+  savePwSetup(){ if(this._previewBlocked('setting a password')) return; const s=this.state.pwSetup; if(!s) return; const cu=this.state.currentUser;
     if(!cu||cu.role!=='staff'||String(cu.staffId)!==String(s.staffId)){ this.setState({pwSetup:null,pwNew1:'',pwNew2:'',pwSetupErr:''}); return; } const a=String(this.state.pwNew1||''), b=String(this.state.pwNew2||'');
     const last=(this.nameParts(s.name).last||'').toLowerCase();
     if(a.length<6){ this.setState({pwSetupErr:'Password must be at least 6 characters.'}); return; }
@@ -8396,6 +8396,11 @@ class Component extends DCLogic {
     try{ const pv=document.getElementById('__audPreview'); if(pv) pv.remove(); }catch(e){}
     this.setState({...this._userStateReset(), currentUser:null, role:null, authStep:'select', loginRole:null, loginEmail:'', loginPw:'', loginError:'', hopAdmin:false}); }
   // Admin-only quick portal hop (permission: access_all_portals)
+  // Admin "view as" preview of the Staff portal is strictly read-only: nothing an admin does there
+  // may be written to the real employee's training record (completions, quiz attempts, progress,
+  // acknowledgements, password). Returns true (and tells the admin) when a write must be refused.
+  staffPreviewReadOnly(){ const cu=this.state.currentUser; return !!(this.state.hopOrigin&&cu&&cu.viewAs&&cu.role==='staff'); }
+  _previewBlocked(what){ if(!this.staffPreviewReadOnly()) return false; const cu=this.state.currentUser; this.toast('Admin preview is read-only: '+(what||'this action')+' is disabled so nothing is saved to '+((cu&&cu.name)||'this employee')+'\u2019s record.'); return true; }
   // Admin "view as" portal hop. The admin's own identity is kept in hopOrigin for the whole hop:
   // returning to Admin restores exactly that person, every audit entry made while hopped names the
   // admin as the actor (auditEntry), and each hop is itself audited. The previewed account is a
@@ -9151,7 +9156,7 @@ class Component extends DCLogic {
     const scorm=this._scormProgressMap()[key]; if(scorm) return scorm;
     return {status:'Not Started',pct:0,done:{},completed:null};
   }
-  openCoursePlayer(cid){ const cuS=this.state.currentUser; const course=this.state.onlineCourses.find(x=>x.id===cid);
+  openCoursePlayer(cid){ if(this._previewBlocked('starting an online course')) return; const cuS=this.state.currentUser; const course=this.state.onlineCourses.find(x=>x.id===cid);
     if(course&&course.scorm){ this.launchScormCourse(cid,{preview:false}); return; }
     if(cuS && cuS.role==='staff' && cuS.staffId){ const _c=course; const _p=this.getProg(cid, cuS.staffId);
       if(_c && _p && _p.status==='Not Started') this.logTrainingEvent('start', _c.title, 'Online course', cuS.staffId); }
@@ -9318,9 +9323,9 @@ class Component extends DCLogic {
     let startAt=scos.findIndex(s=>!scoState[s.id].passed);if(startAt<0)startAt=0;
     openSco(startAt);
     if(statusEl&&!multi)statusEl.textContent=opts.preview?'Preview mode — results will not post to a transcript.':'Course opened · progress will save when the package reports it.';}
-  recordScormCompletion(c,sid,res){const cu=this.state.currentUser;if(!cu||cu.role!=='staff'||!cu.staffId||String(cu.staffId)!==String(sid)){this.toast('Only the signed-in staff member can post a SCORM completion.');return false;}const existing=((this.state.docs&&this.state.docs.completions)||[]).find(x=>String(x.staffId)===String(sid)&&x.courseId===c.id&&Number(x.version||1)===Number(c.version||1));if(existing)return false;const today=new Date(),dstr=this.formatMDY(today),certGen=(c.certEnabled!==false)&&(c.code?this.issuesCertificate(c.code):true),expDays={'Annual':365,'Every 2 years':730,'Every 3 years':1095}[c.expiration];let expStr='No expiration';if(expDays){const e=new Date(today);e.setDate(e.getDate()+expDays);expStr=(e.getMonth()+1)+'/'+e.getDate()+'/'+String(e.getFullYear()).slice(2);}const score=this._scormScore(res),courseKey=c.code||('SCORM_'+c.id),newComp={id:'sc'+Date.now(),courseId:c.id,courseTitle:c.title,displayCourseTitle:c.title,course:courseKey,code:c.code,complianceCode:c.code,classification:c.code?'Mandatory':'Professional Development',countsTowardCompliance:!!c.code,addToTranscript:c.trxEnabled!==false,transcriptStatus:c.trxEnabled===false?'not_applicable':'posted',certificateStatus:certGen?'generated':'not_applicable',version:c.version||1,staffId:sid,date:dstr,expires:expStr,certGenerated:certGen,certId:certGen?('CERT-'+c.id+'-v'+(c.version||1)+'-'+sid):null,source:'SCORM '+(c.scorm&&c.scorm.version||''),score:score,expOverride:false};const st=this.staffById(sid),docs={...this.state.docs,completions:[...((this.state.docs&&this.state.docs.completions)||[]),newComp]};docs.notifications=[{id:'ntf'+Date.now()+'-'+Math.floor(Math.random()*10000),t:Date.now(),ts:new Date().toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'}),kind:'complete',title:c.title,ctype:'SCORM course',staffId:sid,staff:st?st.name:String(sid),loc:(st&&st.loc)||'—',read:false,watched:null,score},...(((this.state.docs&&this.state.docs.notifications)||[]))].slice(0,300);const prog={...this.state.courseProg};prog[this.progKey(c.id,sid)]={status:'Completed',pct:100,done:{},completed:dstr,score};const roster=this.applyCompletionsToRoster(this.applyVoidsToRoster(this.state.roster,docs),docs);this.saveDocs(docs);this.setState({docs,courseProg:prog,roster});try{const SS=window.HASCStore;if(SS)SS.completeCourse(sid,c.id,{version:c.version||1,source:'scorm'});}catch(e){}this._mirrorToService('online.complete',S=>{S.upsertStaff({id:sid});S.completeOnlineCourse({staffId:sid,courseCode:c.code,version:c.version,certEnabled:certGen,reqs:{scormComplete:true,quizPassed:true,attested:true}},'Staff');});this.logAudit('SCORM course completion awarded',{staff:(st&&st.name)||String(sid),target:c.title,next:'v'+(c.version||1)+' completed'+(score!=null?' · '+score+'%':''),notes:'SCORM '+(c.scorm&&c.scorm.version||'')+' · '+(certGen?'certificate generated':'transcript-only'),sev:'Compliance'});this.logTrainingEvent('complete',c.title,'SCORM course',sid,{score});this.toast('SCORM course complete — completion posted'+(certGen?' and certificate generated.':'.'));return true;}
+  recordScormCompletion(c,sid,res){ if(this._previewBlocked('posting a completion')) return false;const cu=this.state.currentUser;if(!cu||cu.role!=='staff'||!cu.staffId||String(cu.staffId)!==String(sid)){this.toast('Only the signed-in staff member can post a SCORM completion.');return false;}const existing=((this.state.docs&&this.state.docs.completions)||[]).find(x=>String(x.staffId)===String(sid)&&x.courseId===c.id&&Number(x.version||1)===Number(c.version||1));if(existing)return false;const today=new Date(),dstr=this.formatMDY(today),certGen=(c.certEnabled!==false)&&(c.code?this.issuesCertificate(c.code):true),expDays={'Annual':365,'Every 2 years':730,'Every 3 years':1095}[c.expiration];let expStr='No expiration';if(expDays){const e=new Date(today);e.setDate(e.getDate()+expDays);expStr=(e.getMonth()+1)+'/'+e.getDate()+'/'+String(e.getFullYear()).slice(2);}const score=this._scormScore(res),courseKey=c.code||('SCORM_'+c.id),newComp={id:'sc'+Date.now(),courseId:c.id,courseTitle:c.title,displayCourseTitle:c.title,course:courseKey,code:c.code,complianceCode:c.code,classification:c.code?'Mandatory':'Professional Development',countsTowardCompliance:!!c.code,addToTranscript:c.trxEnabled!==false,transcriptStatus:c.trxEnabled===false?'not_applicable':'posted',certificateStatus:certGen?'generated':'not_applicable',version:c.version||1,staffId:sid,date:dstr,expires:expStr,certGenerated:certGen,certId:certGen?('CERT-'+c.id+'-v'+(c.version||1)+'-'+sid):null,source:'SCORM '+(c.scorm&&c.scorm.version||''),score:score,expOverride:false};const st=this.staffById(sid),docs={...this.state.docs,completions:[...((this.state.docs&&this.state.docs.completions)||[]),newComp]};docs.notifications=[{id:'ntf'+Date.now()+'-'+Math.floor(Math.random()*10000),t:Date.now(),ts:new Date().toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'}),kind:'complete',title:c.title,ctype:'SCORM course',staffId:sid,staff:st?st.name:String(sid),loc:(st&&st.loc)||'—',read:false,watched:null,score},...(((this.state.docs&&this.state.docs.notifications)||[]))].slice(0,300);const prog={...this.state.courseProg};prog[this.progKey(c.id,sid)]={status:'Completed',pct:100,done:{},completed:dstr,score};const roster=this.applyCompletionsToRoster(this.applyVoidsToRoster(this.state.roster,docs),docs);this.saveDocs(docs);this.setState({docs,courseProg:prog,roster});try{const SS=window.HASCStore;if(SS)SS.completeCourse(sid,c.id,{version:c.version||1,source:'scorm'});}catch(e){}this._mirrorToService('online.complete',S=>{S.upsertStaff({id:sid});S.completeOnlineCourse({staffId:sid,courseCode:c.code,version:c.version,certEnabled:certGen,reqs:{scormComplete:true,quizPassed:true,attested:true}},'Staff');});this.logAudit('SCORM course completion awarded',{staff:(st&&st.name)||String(sid),target:c.title,next:'v'+(c.version||1)+' completed'+(score!=null?' · '+score+'%':''),notes:'SCORM '+(c.scorm&&c.scorm.version||'')+' · '+(certGen?'certificate generated':'transcript-only'),sev:'Compliance'});this.logTrainingEvent('complete',c.title,'SCORM course',sid,{score});this.toast('SCORM course complete — completion posted'+(certGen?' and certificate generated.':'.'));return true;}
 
-  cpSimWatch(){ this.setState({cpWatch:100}); const cu=this.state.currentUser; const sid=cu&&cu.role==='staff'&&cu.staffId?String(cu.staffId):null; if(!sid)return; const c=this.state.onlineCourses.find(x=>x.id===this.state.coursePlayerId); this._mirrorToService('video.progress', S=>S.recordVideoProgress({staffId:sid,courseId:c&&c.id,moduleId:((c&&c.id)||'oc')+'-vid',videoId:'sample',watchedSeconds:100,totalSeconds:100,requiredPercent:95})); } // simulate finishing the video (prod: real timeupdate events)
+  cpSimWatch(){ if(this._previewBlocked('recording video progress')) return; this.setState({cpWatch:100}); const cu=this.state.currentUser; const sid=cu&&cu.role==='staff'&&cu.staffId?String(cu.staffId):null; if(!sid)return; const c=this.state.onlineCourses.find(x=>x.id===this.state.coursePlayerId); this._mirrorToService('video.progress', S=>S.recordVideoProgress({staffId:sid,courseId:c&&c.id,moduleId:((c&&c.id)||'oc')+'-vid',videoId:'sample',watchedSeconds:100,totalSeconds:100,requiredPercent:95})); } // simulate finishing the video (prod: real timeupdate events)
   cpAnswerEmbed(i){ this.setState({cpEmbedAns:i}); }
   cpEmbedContinue(){ this.setState({cpEmbedDone:true}); }
   cpSetQuiz(qi,oi){ if(this.state.cpQuizShown) return; this.setState(s=>({cpQuizAns:{...s.cpQuizAns,[qi]:oi}})); }
@@ -9354,7 +9359,7 @@ class Component extends DCLogic {
   cpToggleAttest(){ this.setState(s=>({cpAttest:!s.cpAttest})); }
   cpNext(){ const c=this.state.onlineCourses.find(x=>x.id===this.state.coursePlayerId)||((this.state.vtCourse&&this.state.vtCourse.id===this.state.coursePlayerId)?this.state.vtCourse:null); if(!c) return; if(this.state.cpStep<c.modules.length-1){ this.setState(s=>({cpStep:s.cpStep+1, cpEmbedAns:null, cpEmbedDone:false, cpQuizAns:{}, cpQuizShown:false, cpWatch:0})); } }
   cpQuizScore(c){ const q=c.modules.find(m=>m.type==='quiz'); if(!q) return 100; let ok=0; q.questions.forEach((qq,i)=>{ if(this.state.cpQuizAns[i]===qq.answer) ok++; }); return Math.round(ok/q.questions.length*100); }
-  finishOnlineCourse(){ let c=this.state.onlineCourses.find(x=>x.id===this.state.coursePlayerId); if(!c && this.state.vtCourse && this.state.vtCourse.id===this.state.coursePlayerId) c=this.state.vtCourse; if(!c) return; const cu=this.state.currentUser; if(!cu||cu.role!=='staff'||!cu.staffId){this.toast('Only the signed-in staff member can post an online-course completion.');return;} const sid=cu.staffId;
+  finishOnlineCourse(){ if(this._previewBlocked('finishing a course')) return; let c=this.state.onlineCourses.find(x=>x.id===this.state.coursePlayerId); if(!c && this.state.vtCourse && this.state.vtCourse.id===this.state.coursePlayerId) c=this.state.vtCourse; if(!c) return; const cu=this.state.currentUser; if(!cu||cu.role!=='staff'||!cu.staffId){this.toast('Only the signed-in staff member can post an online-course completion.');return;} const sid=cu.staffId;
     if(c.vtVideoId){
       const v=this.SS().vtVideoForStaff(c.vtVideoId,sid)||this.SS().vtVideoById(c.vtVideoId); const _st=this.staffById(sid); const sname=_st?_st.name:sid; const sig=(this.state.cpSig||'').trim();
       if(v&&v.require_attestation!==false){ if(!this.state.cpAttest){this.toast('Check the attestation box to complete.');return;} if(!sig){this.toast('Type your full name to sign the attestation.');return;} if(!this.signatureMatchesName(sig,sname)){this.toast('The signature must match your name as it appears on your staff record ('+sname+').');return;} this.SS().vtAttest(v.id,sid,sname,sig); }
@@ -13476,9 +13481,9 @@ class Component extends DCLogic {
     this.setState({vtUpdId:null,vtUpdForm:null,vtUpdMsg:'',storeVer:(this.state.storeVer||0)+1});
   }
   safeAssetSrc(u){ const x=String(u||'').trim(); return (/^https?:\/\/[^\s]+$/i.test(x)||/^data:(image\/[a-z0-9.+-]+|application\/pdf)[;,]/i.test(x))?x:''; }
-  vtOpenUpdate(id){ this.setState({vtUpdViewId:id}); }
+  vtOpenUpdate(id){ if(this._previewBlocked('opening a training update')) return; this.setState({vtUpdViewId:id}); }
   vtCloseUpdate(){ this.setState({vtUpdViewId:null}); }
-  vtAcknowledgeUpdate(id,staffId,staffName){
+  vtAcknowledgeUpdate(id,staffId,staffName){ if(this._previewBlocked('acknowledging a training update')) return;
     const res=this.SS().vtAcknowledgeContentUpdate(id,staffId,staffName);
     if(!res||!res.ok){this.toast('This update could not be acknowledged. Please reopen it and try again.');return;}
     const u=this.SS().vtContentUpdateById(id); const stamp=new Date(res.acknowledgement.acknowledged_at).toLocaleString('en-US',{year:'numeric',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
@@ -13575,7 +13580,7 @@ class Component extends DCLogic {
     if(!merged.length) return 0;
     return merged[0][0]<=1.5 ? merged[0][1] : 0;
   }
-  async vtOpen(videoId, staffId, options){
+  async vtOpen(videoId, staffId, options){ if(this._previewBlocked('starting a video course')) return;
     const v=this.vtPlayingVideo(videoId,staffId); if(!v) return; options=options||{};
     this._vtBuf=[]; this._vtLast=null; this._vtWall=null; this._vtSeeked=false; this._vtFlush=0; this._vtSid=staffId; this._vtDur=0; this._vtDurRegistered=0; this._vtNag=0; this._vtCtlNag=0; this._vtResume=1;
     let src=v.src, kind='native';
@@ -13774,7 +13779,7 @@ class Component extends DCLogic {
   // method name kept distinct from the vtGatePick state key it writes
   vtGateChoose(oi){ if(this.state.vtGateResult&&this.state.vtGateResult.correct) return;
     this.setState({ vtGatePick:oi, vtGateResult:null }); }
-  vtGateSubmit(videoId, staffId, staffName){
+  vtGateSubmit(videoId, staffId, staffName){ if(this._previewBlocked('submitting a quiz')) return;
     const i=this.state.vtGateIdx, pick=this.state.vtGatePick;
     if(i==null) return;
     if(pick==null){ this.toast('Choose an answer to continue.'); return; }
@@ -13838,7 +13843,7 @@ class Component extends DCLogic {
   vtCloseQuiz(){ this.setState({ vtQuizOpen:false, vtQuizResult:null }); }
   vtSetAttest(v){ this.setState({ vtAttested:!!v }); }
   vtSetSig(v){ this._fastTextState('vtSig',v,null,120); }
-  vtFinishVideoCourse(videoId, staffId, staffName){
+  vtFinishVideoCourse(videoId, staffId, staffName){ if(this._previewBlocked('finishing a course')) return;
     const cu=this.state.currentUser; if(!cu||cu.role!=='staff'||!cu.staffId||String(cu.staffId)!==String(staffId)){this.toast('Only the signed-in staff member can complete this training.');return;}
     const v=this.vtPlayingVideo(videoId,staffId); if(!v) return;
     const needA=(v.require_attestation!==false); const sig=(this.state.vtSig||'').trim();
@@ -13863,7 +13868,7 @@ class Component extends DCLogic {
     this.toast((result.duplicate?'Completion was already recorded. ':'Completed '+v.title+'. ')+(bits.length?bits.join(' · '):'Completion documented.'));
   }
   vtPick(qi,oi){ this.setState(s=>({ vtQuizAns:{...s.vtQuizAns,[qi]:oi} })); }
-  vtSubmitQuiz(videoId, staffId, staffName){
+  vtSubmitQuiz(videoId, staffId, staffName){ if(this._previewBlocked('submitting a quiz')) return;
     const v=this.vtPlayingVideo(videoId,staffId); if(!v) return;
     const ans=this.state.vtQuizAns;
     const finalQs=this.SS().vtFinal(videoId,staffId);
@@ -13878,7 +13883,7 @@ class Component extends DCLogic {
   /* Posts the official final completion into the existing documents/transcript
      architecture. Elective records never touch mandatory compliance unless the
      course explicitly enables counts_toward_compliance. */
-  vtPostCompletion(video, staffId, score, completion){
+  vtPostCompletion(video, staffId, score, completion){ if(this._previewBlocked('posting a completion')) return 0;
     completion=completion||this.SS().vtCompletionFor(video.id,staffId,video.version_number||this.SS().vtVersionForStaff(video.id,staffId)); if(!completion)return 0;
     const st=(this.state.roster||[]).find(r=>r.id===staffId); if(!st)return 0;
     const existing=((this.state.docs&&this.state.docs.completions)||[]).find(c=>c.staffId===staffId&&c.videoId===video.id&&Number(c.videoVersion||1)===Number(video.version_number||1)&&Number(c.retakeNo||1)===Number(completion.retake_no||1)&&!c.voided);
@@ -14263,7 +14268,7 @@ class Component extends DCLogic {
     if(v.require_attestation!==false) mods.push({ type:'attestation', text:'I certify that I personally completed this training and understand the material presented.' });
     if(v.compliance_code && this.issuesCertificate(v.compliance_code)) mods.push({ type:'certificate' });
     return { id:'vtc:'+v.id, code:(v.compliance_code||''), title:v.title, passing:(v.passing_score||80), certEnabled:!!(v.compliance_code&&this.issuesCertificate(v.compliance_code)), vtVideoId:v.id, updateOnly:false, modules:mods }; }
-  async playVideoCourse(videoId, staffId){ const ss=this.SS(),v=ss.vtVideoForStaff(videoId,staffId); if(!v) return;
+  async playVideoCourse(videoId, staffId){ if(this._previewBlocked('starting a video course')) return; const ss=this.SS(),v=ss.vtVideoForStaff(videoId,staffId); if(!v) return;
     const completion=ss.vtCompletionFor?ss.vtCompletionFor(v.id,staffId,v.version_number||1):null;
     const pending=(ss.vtUpdatePendingForStaff?ss.vtUpdatePendingForStaff(v.id,staffId):[]);
     const course=this.vtCourseFromVideo(v,staffId,!!completion&&pending.length>0); if(!course||!course.modules.length) return;
@@ -14916,7 +14921,7 @@ class Component extends DCLogic {
   
   // Shared online-completion writer — single source of truth for finishOnlineCourse.
   // Persists through saveDocs, dedups by staff+code+version, updates roster/compliance, logs audit.
-  postOnlineCompletion({staffId, code, displayTitle, date, expires, version, courseId, certId}){
+  postOnlineCompletion({staffId, code, displayTitle, date, expires, version, courseId, certId}){ if(this._previewBlocked('posting a completion')) return;
     const sid=staffId; const comps=(this.state.docs.completions||[]);
     const same=x=>String(x.staffId)===String(sid) && (x.code===code||x.complianceCode===code||x.course===code) && (version?((x.version||1)===version):true) && (x.source||'').toLowerCase().indexOf('online')>=0;
     // Dedupe only a double-submit (same course/version/date); a retake is appended with its own
@@ -16953,7 +16958,7 @@ class Component extends DCLogic {
         onSavePw:()=>this.savePwSetup(), loginError:this.state.loginError, hasLoginError:!!this.state.loginError,
       showInstrPicker:this.state.loginRole==='instructor', instrPick:this.state.loginEmail, instrLoginOpts:(this.state.instructors||[]).filter(i=>i.status==='active').map(i=>({email:(i.email||this.deriveEmail(i.fullName)), name:i.fullName})).concat((this.ACCOUNTS.instructor||[]).map(a=>({email:a.email,name:a.name}))).filter((o,idx,arr)=>o.email&&arr.findIndex(x=>x.email===o.email)===idx).sort((a,b)=>a.name.localeCompare(b.name)), onInstrPick:(e)=>this.setState({loginEmail:e.target.value,loginError:''}), onLoginEmail:(e)=>this.setState({loginEmail:e.target.value,loginError:''}), onLoginPw:(e)=>this.setState({loginPw:e.target.value,loginError:''}), onDoLogin:()=>this.doLogin(), onBack:()=>this.backToSelect(),
       roleBadge: role?(((this.state.hopOrigin&&cu&&cu.viewAs)?'Viewing as ':'')+role.charAt(0).toUpperCase()+role.slice(1)):'', assignedLocLine, showSwitcher:this.can('access_all_portals')||!!this.state.hopAdmin, onLogout:()=>this.logout(),
-      hopActive:!!(this.state.hopOrigin&&cu&&cu.viewAs), hopBanner:(this.state.hopOrigin&&cu&&cu.viewAs)?('Admin preview: '+this.state.hopOrigin.name+' is viewing the '+(this.PORTAL[cu.role]||cu.role)+' as '+cu.name+'. Anything you do here is recorded under '+this.state.hopOrigin.name+'.'):'', onHopReturn:()=>this.switchRole('admin'),
+      hopActive:!!(this.state.hopOrigin&&cu&&cu.viewAs), hopBanner:(this.state.hopOrigin&&cu&&cu.viewAs)?('Admin preview: '+this.state.hopOrigin.name+' is viewing the '+(this.PORTAL[cu.role]||cu.role)+' as '+cu.name+'. '+(cu.role==='staff'?('Read-only: courses, quizzes, acknowledgements and password changes are disabled, so nothing is saved to '+cu.name+'\u2019s record.'):('Anything you do here is recorded under '+this.state.hopOrigin.name+'.'))):'', onHopReturn:()=>this.switchRole('admin'),
       hdr:P.hdr, btn:P.btn, solid:P.solid, theme:_theme, themeOpts, thStyle, tdStyle, crHeadStyle, kpiCard, kpiLbl,
       rolePicker, roleSwitch, portalName:u.portal, userName:u.name, userRole:u.role, userInitials:u.ini, nav,
       navGroups, navGroupsShow:navGroups.length>0,
