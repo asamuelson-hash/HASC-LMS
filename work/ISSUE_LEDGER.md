@@ -1,7 +1,147 @@
-# HASC LMS — Issue Ledger (readiness audit 2026-09-22)
+# HASC LMS — Issue Ledger (production-readiness review, 2026-09-22)
 
-Baseline: `HASC_LMS_v5_ATTENDANCE_DESCRIPTIONS_2026-09-22.html`
-Status values: Open · In progress · Fixed (verified) · Deferred · Won't fix (by design)
+Baseline: `HASC_LMS_v5_ATTENDANCE_DESCRIPTIONS_2026-09-22.html`. Regenerate with `python3 tools/ledger.py`.
+Full evidence, root cause, fix and test plan for each ID: `work/audit/<area>.md`.
 
-| ID | Description | Sev | Owner | Status | Fix | Verification |
+**138 findings** — Critical: 11, High: 45, Medium: 53, Low: 29
+
+| ID | Description | Sev | Owner | Status | Fix implemented | Verification |
 |---|---|---|---|---|---|---|
+| ADM-01 | Creating a Course Library course "mapped to" an existing requirement overwrites that requirement's global rules. | Critical | Lead (batch 1) | Fixed (verified) | Catalog merge never copies interval/audience onto built-in codes | rules.test ADM-01/01b |
+| CMP-01 | Required courses that were never completed show as "white" and count as compliant everywhere | Critical | Lead (batch 1) | Fixed (verified) | Required-but-missing → due/overdue from hire + due window (policy 2026-09-22); legacy toggle; ruleDiagnostic text | compliance.test CMP-01a/b/c; agency 85.4% → 77.2% |
+| CMP-02 | Backfilling an older completion turns a currently compliant staff member red | Critical | Lead (batch 1) | Fixed (verified) | Single replay: only latest completion drives date/expiry; recordCompletion post-map removed | compliance.test CMP-02 + RELOAD (baseline FAIL → PASS) |
+| CMP-03 | An old `expOverride` survives newer completions, so staff stay red after passing a class | Critical | Lead (batch 1) | Fixed (verified) | Replay clears override when winning completion has none; certify routes through replay | compliance.test CMP-03a/b, SCH-05 |
+| CMP-04 | A cert that satisfies several courses (EMT card → CPR+FA) loses its compliance effect on reload | Critical | Lead (batch 1) | Fixed (verified) — compliance part | Replay applies satisfiedRequirements; compound codes split; ext-cert writers store primary code. Transcript/partial-void display → W2 | compliance.test CMP-04a + RELOAD |
+| CRT-01 | Entering an older (backdated) completion or external certificate overwrites a newer one and makes compliant staff Expired _(same defect as CMP-02)_ | Critical | Lead (batch 1) | Fixed (verified) | Single replay: only latest completion drives date/expiry; recordCompletion post-map removed | compliance.test CMP-02 + RELOAD (baseline FAIL → PASS) |
+| IMP-01 | Status text and future dates import as completions and make staff compliant _(same defect as CMP-06)_ | Critical | Lead (batch 1) | Fixed (verified) | Strict parseMDY/importDate; completionDateError on all manual entry paths + import rows | compliance.test CMP-06a/b; rules.test IMP-01a/b, QA-01 |
+| MGR-01 | Home and "My Reports" show wrong overdue and due-soon counts (read from raw import letters instead of the compliance engine) _(same defect as CMP-05)_ | Critical | Lead (batch 1) | Fixed (verified) | Manager KPIs/staff cards/Register note from effStatus | rules.test MGR-01 (0 shown vs 233 → match) |
+| SCH-01 | ISO-dated sessions (every calendar-imported session) move one day earlier in US time zones: registration closes early, certification unlocks before cl | Critical | W1 scheduling | In progress |  |  |
+| STF-04 | The temporary password (last name) works permanently on any other device; the set password is stored only in this browser's localStorage _(same defect | Critical | Architecture | Deferred — needs server auth | Inherent to browser-only prototype; requires Supabase Auth/RLS (SUPABASE_MIGRATION.md) |  |
+| UX-02 | Manager Home and My Reports show "0 with overdue / 0 due soon" next to a grid full of red _(same defect as CMP-05)_ | Critical | Lead (batch 1) | Fixed (verified) | Manager KPIs/staff cards/Register note from effStatus | rules.test MGR-01 (0 shown vs 233 → match) |
+| ADM-02 | Future-dated location requirement changes take effect immediately. | High | W4 admin/import | In progress |  |  |
+| ADM-03 | Renewal-rule changes in Course Information leave the dashboard, matrix and reports stale. | High | Lead (batch 1) | Fixed (code) | Compliance memo deps include courseInfo, complianceRules, customCourses, onlineCourses, day | covered by W4 CRT-08 preview test |
+| ADM-04 | Backup "Import records" accepts any JSON, silently replaces docs and reverts completions to the shipped seed. | High | W4 admin/import | In progress |  |  |
+| ADM-05 | Renaming an instructor orphans their sessions, and a reload re-creates the old name with a duplicate ID. | High | W4 admin/import | In progress |  |  |
+| CMP-05 | Manager Home "With overdue", "Due soon" and staff cards ignore the compliance engine | High | Lead (batch 1) | Fixed (verified) | Manager KPIs/staff cards/Register note from effStatus | rules.test MGR-01 (0 shown vs 233 → match) |
+| CMP-06 | Future-dated and impossible completion dates are accepted and count as compliant | High | Lead (batch 1) | Fixed (verified) | Strict parseMDY/importDate; completionDateError on all manual entry paths + import rows | compliance.test CMP-06a/b; rules.test IMP-01a/b, QA-01 |
+| CMP-07 | The initial ART due date resets whenever someone repeats an orientation course | High | W5 surfaces | In progress |  |  |
+| CMP-08 | EPP is treated as one-time, yet both the course description and the data show it is annual | High | W2 certs | In progress |  |  |
+| CRT-02 | Older completions on the transcript, certificates and Completions list show the latest completion's expiry | High | W2 certs | In progress |  |  |
+| CRT-03 | A completion re-entered after a void is permanently invisible, yet compliance shows green with no date | High | W2 certs | In progress |  |  |
+| CRT-04 | EMT or multi-requirement external certificates: partial void is inconsistent, compliance lives only in the roster, and the transcript shows duplicate  | High | Lead (batch 1) | Fixed (verified) — compliance part | Replay applies satisfiedRequirements; compound codes split; ext-cert writers store primary code. Transcript/partial-void display → W2 | compliance.test CMP-04a + RELOAD |
+| CRT-05 | A certificate can print another completion's Certificate ID and dates; the ID on the staff card differs from the printed one | High | W2 certs | In progress |  |  |
+| CRT-07 | Online-course retake overwrites the prior completion (history lost, same certificate number reused) | High | W2 certs | In progress |  |  |
+| CRT-08 | Changing a course's renewal period silently recalculates expiry for all history, but only for some records | High | W4 admin/import | In progress |  |  |
+| IMP-02 | Lenient date parsing invents dates from non-dates (numbers, missing year, year only) | High | Lead (batch 1) | Fixed (verified) | Strict parseMDY/importDate; completionDateError on all manual entry paths + import rows | compliance.test CMP-06a/b; rules.test IMP-01a/b, QA-01 |
+| IMP-03 | Single-course CSV auto-picks a numeric column (e.g. Score) as the completion date | High | Lead (batch 1) | Fixed (verified) | Strict parseMDY/importDate; completionDateError on all manual entry paths + import rows | compliance.test CMP-06a/b; rules.test IMP-01a/b, QA-01 |
+| IMP-04 | Dates after 2050 are stored as 2-digit years and read back in the 1900s | High | — | Open |  |  |
+| IMP-05 | A partial active-only Intelex file can archive nearly the whole roster; coverage check bypassed | High | W4 admin/import | In progress |  |  |
+| IMP-06 | Staff import replaces valid supervisors with location "placeholder" supervisors | High | W4 admin/import | In progress |  |  |
+| IMP-07 | Undoing the last staff import silently discards every later change | High | W4 admin/import | In progress |  |  |
+| IMP-08 | Cross-tab last-writer-wins can silently drop an applied import and audit entries | High | — | Open |  |  |
+| IMP-09 | Excel-mangled leading-zero IDs create duplicate staff | High | W4 admin/import | In progress |  |  |
+| MGR-02 | Managers see staff far outside their assigned locations, and three different scope rules disagree | High | W3 security | In progress |  |  |
+| MGR-03 | Location Directory manager assignments have no effect on access, and a rename silently drops staff | High | W3 security | In progress |  |  |
+| MGR-04 | Print all matching" prints the entire scope when the search matches nobody | High | W3 security | In progress |  |  |
+| MGR-05 | Inactive or terminated managers can still sign in and see their full scope _(same defect as SEC-03)_ | High | W3 security | In progress |  |  |
+| QA-01 | Free-text date fields accept impossible, future and wrong-century dates and silently change the compliance result. _(same defect as CMP-06)_ | High | Lead (batch 1) | Fixed (verified) | Strict parseMDY/importDate; completionDateError on all manual entry paths + import rows | compliance.test CMP-06a/b; rules.test IMP-01a/b, QA-01 |
+| SCH-02 | Calendar month/year detection takes the first month name in Jan→Dec order, not the calendar's own header; a December PDF that mentions "January 2027"  | High | W1 scheduling | In progress |  |  |
+| SCH-03 | Times like "7 - 9 PM" are imported as 7–9 | High | W1 scheduling | In progress |  |  |
+| SCH-04 | Location printed after the time is never read; every such session gets the course's default location | High | W1 scheduling | In progress |  |  |
+| SCH-05 | Late certification overwrites a newer completion date (compliance date goes backwards and the change is saved) _(same defect as CMP-03)_ | High | Lead (batch 1) | Fixed (verified) | Replay clears override when winning completion has none; certify routes through replay | compliance.test CMP-03a/b, SCH-05 |
+| SCH-06 | Re-uploading a month's calendar resurrects cancelled classes and overwrites admin edits (capacity, instructor, status) | High | W1 scheduling | In progress |  |  |
+| SCH-07 | No role guard on session cancellation; certified or past sessions can be cancelled, notifying staff that their "upcoming" class is cancelled | High | W1 scheduling | In progress |  |  |
+| SEC-01 | Audit packet (with out-of-scope staff records) survives logout and is shown/printed to the next user. | High | W3 security | In progress |  |  |
+| SEC-02 | Admin "portal hop" impersonates real people and misattributes the audit trail; hopping back always becomes Aryeh Samuelson. | High | W3 security | In progress |  |  |
+| SEC-03 | Terminated/archived managers can still sign in to the Manager portal. | High | W3 security | In progress |  |  |
+| SEC-04 | Staff authentication gives almost no protection: the last-name password works on any device indefinitely, and setup can be skipped. | High | Architecture | Deferred — needs server auth | Inherent to browser-only prototype; requires Supabase Auth/RLS (SUPABASE_MIGRATION.md) |  |
+| STF-01 | My Trainings" does not show requirement or compliance status. Staff never see overdue in-person requirements | High | W5 surfaces | In progress |  |  |
+| STF-02 | A failed quiz shows the correct answers, and re-selecting locally enables "Continue" without a recorded pass. This leads to a dead end at the final st | High | W5 surfaces | In progress |  |  |
+| STF-03 | The same certificate shows two different Verification IDs and two different course names _(same defect as CRT-05)_ | High | W2 certs | In progress |  |  |
+| UX-01 | Staff portal never tells staff what they need to do (overdue and missing required training is hidden) _(same defect as STF-01)_ | High | W5 surfaces | In progress |  |  |
+| UX-03 | Managers have no "who on my team is out of compliance" list; the admin-only Overdue Follow-up screen is the one they need | High | W5 surfaces | In progress |  |  |
+| UX-04 | Register screen labels staff who need the course as "Optional refresh" and doesn't put them first | High | W5 surfaces | In progress |  |  |
+| UX-05 | Executive-facing "Agency compliant 85%" overstates readiness; the KPIs on the same screen contradict each other | High | W5 surfaces | In progress |  |  |
+| UX-11 | Phone layout: tall header, hidden tabs, hidden table columns | High | — | Open |  |  |
+| ADM-06 | Changes made less than about 0.8 s before a reload or tab close are lost. | Medium | W4 admin/import | In progress |  |  |
+| ADM-07 | Assign special retraining" is cosmetic: not stored, not assigned to anyone. | Medium | — | Open |  |  |
+| ADM-08 | Staff archive is one click with no confirmation; Staff Records has no archive/restore or edit. | Medium | W4 admin/import | In progress |  |  |
+| ADM-09 | Scheduled Reports compute rows differently from the report builder and never deliver anything. | Medium | — | Open |  |  |
+| ADM-10 | Location-level renewal interval affects status but not the displayed expiration date. _(same defect as CMP-09)_ | Medium | W2 certs | In progress |  |  |
+| ADM-11 | Voids are irreversible, and several admin config changes have no confirmation or audit. | Medium | — | Open |  |  |
+| ADM-12 | Business rules hard-coded that should be admin-configurable. _(same defect as CMP-13)_ | Medium | — | Open |  |  |
+| ADM-13 | Regression: the in-app QA suite has been stubbed out again. _(same defect as QA-02)_ | Medium | W5 surfaces | In progress |  |  |
+| CMP-09 | Location-override renewal intervals change the status but not the displayed expiration | Medium | W2 certs | In progress |  |  |
+| CMP-10 | Status counts expiry in days while the displayed date uses calendar years (leap-year and month-end drift) | Medium | W2 certs | In progress |  |  |
+| CMP-11 | Info" cells (course not required, but a completion exists) count in the compliance % | Medium | W5 surfaces | In progress |  |  |
+| CMP-12 | Transfers and grandfathering conflict: no grace after a role or location change, and the SDCH equivalency ignores the pre-2018 waiver | Medium | — | Open |  |  |
+| CMP-13 | Core compliance rules are hard-coded, and the one-time/renewal lists are duplicated | Medium | — | Open |  |  |
+| CRT-06 | Generated certificate numbers are not unique and not stable | Medium | W2 certs | In progress |  |  |
+| CRT-09 | Certificate disabled for future completions" also removes certificates from past records | Medium | W2 certs | In progress |  |  |
+| CRT-10 | Voided completions can still be printed or opened by the direct certificate functions | Medium | W2 certs | In progress |  |  |
+| CRT-11 | Expiry shown on documents doesn't match the compliance engine for location overrides and day-vs-year arithmetic _(same defect as CMP-09)_ | Medium | W2 certs | In progress |  |  |
+| CRT-12 | Some void and un-void paths are not append-only | Medium | W2 certs | In progress |  |  |
+| CRT-13 | One-time load scrubs hard-delete real completion history without an audit entry | Medium | — | Open |  |  |
+| IMP-10 | Excel 1904 date system not handled; namespaced sheet XML rejected | Medium | W4 admin/import | In progress |  |  |
+| IMP-11 | Unknown or typo course codes import silently as Legacy history | Medium | W4 admin/import | In progress |  |  |
+| IMP-12 | No undo or rollback for training-record imports; persistence failure only toasts | Medium | W4 admin/import | In progress |  |  |
+| IMP-14 | Attendance sheet re-upload replaces the previous file with no history; no size limit | Medium | — | Open |  |  |
+| MGR-06 | Video Training tab shows agency-wide statistics and location names to managers | Medium | W5 surfaces | In progress |  |  |
+| MGR-07 | Video Training rows mislabel completed training as "Overdue · Not started", and three status filters never match | Medium | W5 surfaces | In progress |  |  |
+| MGR-08 | Include archived" batch printing refuses the archived staff it lists | Medium | — | Open |  |  |
+| MGR-09 | A derived login email is shared by two managers, and the first match wins | Medium | W3 security | In progress |  |  |
+| MGR-11 | Home and Online Progress cut off large teams with no notice | Medium | W5 surfaces | In progress |  |  |
+| QA-02 | The QA / Workflow Test Center was removed again (regression of AUDIT fix #10). | Medium | W5 surfaces | In progress |  |  |
+| QA-05 | isArchivedStaff()` reverted to a linear scan, so active-roster filtering is about 100× slower. | Medium | W5 surfaces | In progress |  |  |
+| QA-06 | Every seeded session is in the past, so registration is unusable at the real date. | Medium | Ops/data | Deferred — data | All seeded sessions are past; load the real upcoming calendar |  |
+| QA-07 | Training-record import has no batch undo, and duplicates are only checked when the file is analyzed. _(same defect as IMP-12)_ | Medium | W4 admin/import | In progress |  |  |
+| QA-09 | Batch print blocks the main thread for more than 2.5 s. | Medium | — | Open |  |  |
+| SCH-08 | Editing a certified session's date or time does not update its completions, and edits don't update request snapshots | Medium | W1 scheduling | In progress |  |  |
+| SCH-09 | AMAP Day 1 - 2" / "SCIP Day 1-2" multi-day entries are imported as Day 1 at 1:00–2:00 PM | Medium | W1 scheduling | In progress |  |  |
+| SCH-10 | Capacity/waitlist gaps: no promotion when capacity rises, pending requests hold seats against admin adds, and nothing prevents double-booking the same | Medium | W1 scheduling | In progress |  |  |
+| SCH-14 | Walk-ins on the sheet cannot be recorded in the LMS after class starts | Medium | — | Open |  |  |
+| SEC-05 | First-login password-setup state is not cleared on logout, so the next person can set another staff member's password. | Medium | W3 security | In progress |  |  |
+| SEC-06 | Shared role passwords; the manager "hash" does not protect anything; instructor list shown before login. | Medium | Architecture | Deferred — needs server auth | Inherent to browser-only prototype; requires Supabase Auth/RLS (SUPABASE_MIGRATION.md) |  |
+| SEC-07 | SCORM player iframe is effectively unsandboxed (`allow-scripts allow-same-origin` + `srcdoc`). | Medium | — | Open |  |  |
+| STF-05 | Presentation does not check permission. A staff session can render another employee's certificate and transcript | Medium | W3 security | In progress |  |  |
+| STF-06 | Each assigned video course appears twice on My Trainings, and the two copies can show different statuses | Medium | W5 surfaces | In progress |  |  |
+| STF-07 | The attestation signature accepts any text | Medium | W5 surfaces | In progress |  |  |
+| STF-08 | The temporary-password rule is ambiguous for compound surnames and suffixes | Medium | — | Open |  |  |
+| UX-06 | Status vocabulary is inconsistent across portals (and within one screen) | Medium | — | Open |  |  |
+| UX-07 | Course abbreviations with no expansion (O1, SDCH 1, ART, EPP, PA, SCIP, WC In-Pers, Diab. Pour…) | Medium | — | Open |  |  |
+| UX-08 | Destructive or irreversible actions with no confirmation or reason | Medium | — | Open |  |  |
+| UX-09 | Manager "Deny" button always fails _(same defect as MGR-10)_ | Medium | W3 security | In progress |  |  |
+| UX-10 | Every message, errors included, is a 2.6-second toast with a green ✓ | Medium | — | Open |  |  |
+| UX-12 | Instructor workflow: extra steps and the wrong default session | Medium | — | Open |  |  |
+| UX-13 | Register page: an empty calendar with no guidance, and copy that says "on the left" | Medium | — | Open |  |  |
+| UX-14 | Duplicate or overlapping screens and confusing tab names | Medium | — | Open |  |  |
+| UX-16 | Sign-in: contradictory instructions, no recovery path, unhelpful errors | Medium | — | Open |  |  |
+| CMP-14 | Surfaces compute the % from different populations and course sets | Low | W5 surfaces | In progress |  |  |
+| CMP-15 | Today" is the unauthenticated device clock | Low | Architecture | Deferred — needs server auth | Inherent to browser-only prototype; requires Supabase Auth/RLS (SUPABASE_MIGRATION.md) |  |
+| CRT-14 | Built-in course titles are not captured on seed and dt rows (rename rewrites history) | Low | — | Open |  |  |
+| IMP-13 | Blank columns wipe existing values; display-name split is naive | Low | W4 admin/import | In progress |  |  |
+| IMP-15 | Intelex support accounts are imported and counted as active staff | Low | — | Open |  |  |
+| MGR-10 | The Home "Deny" button always fails for managers | Low | W3 security | In progress |  |  |
+| MGR-12 | The header and team line misstate the manager's scope | Low | W3 security | In progress |  |  |
+| MGR-13 | Approving a Staff Training Portal request does not schedule anything, but the toast says it does | Low | — | Open |  |  |
+| MGR-14 | Audit-packet history is filtered by location, not by staff scope | Low | W3 security | In progress |  |  |
+| MGR-15 | A string `assignedLocations` value crashes scope resolution | Low | W3 security | In progress |  |  |
+| MGR-16 | The Course Progress tab is slow for large scopes | Low | — | Open |  |  |
+| QA-03 | Void Completion modal shows a blank "Related session" (regression of AUDIT fix #8). | Low | W5 surfaces | In progress |  |  |
+| QA-04 | Admin Reports KPI tile caption is blank (unsupported ternary in the template). | Low | W5 surfaces | In progress |  |  |
+| QA-08 | Duplicate `pourFormLabel` key in renderVals (regression of AUDIT fix #9). | Low | W5 surfaces | In progress |  |  |
+| QA-10 | Controls that look usable but do nothing. | Low | — | Open |  |  |
+| QA-11 | Seed data contains 741 duplicated historical completion groups. | Low | — | Open |  |  |
+| SCH-11 | Post-certification corrections leave the session roster `result` stale; a correction from absent to present records "failed" first | Low | W1 scheduling | In progress |  |  |
+| SCH-12 | Import silently drops entries printed in leading/trailing adjacent-month cells, and rejects the whole month for "9am to 5pm" | Low | — | Open |  |  |
+| SCH-13 | Attendance descriptions: wired end to end, with gaps | Low | — | Open |  |  |
+| SEC-08 | Training-update "asset URL" rendered into an `<iframe src>` without scheme validation for "note" updates. | Low | W3 security | In progress |  |  |
+| SEC-09 | Permission matrix is mostly decorative; import handlers have no action guard. | Low | W3 security | In progress |  |  |
+| SEC-10 | Third-party script loaded without Subresource Integrity in the same origin as all PII. | Low | Architecture | Deferred — needs server auth | Inherent to browser-only prototype; requires Supabase Auth/RLS (SUPABASE_MIGRATION.md) |  |
+| STF-09 | Login error messages reveal account status, and staff with short IDs cannot use Staff ID login | Low | — | Open |  |  |
+| STF-10 | Login-card footer text is wrong for staff | Low | — | Open |  |  |
+| STF-11 | No self-service registration or session request. Every entry point says "contact your manager" | Low | — | Open |  |  |
+| STF-12 | A cancelled session stays under "needs rescheduling" indefinitely and shows no reason | Low | — | Open |  |  |
+| UX-15 | Vendor and infrastructure jargon shown to managers and staff-facing users | Low | — | Open |  |  |
+| UX-17 | Missing or misleading empty states | Low | — | Open |  |  |
+| UX-18 | Location lists differ between screens and include junk entries | Low | — | Open |  |  |
