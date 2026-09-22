@@ -22,11 +22,29 @@ st('ADM-01', L1, 'Fixed (verified)', 'Catalog merge never copies interval/audien
 st('ADM-03', L1, 'Fixed (code)', 'Compliance memo deps include courseInfo, complianceRules, customCourses, onlineCourses, day', 'covered by W4 CRT-08 preview test')
 st('VOID-01', L1, 'Fixed (verified)', 'Void falls back to preserved imported date (baseDt / Sept-15 reference) instead of deleting', 'compliance.test VOID-01')
 W1='W1 scheduling'; W2='W2 certs'; W3='W3 security'; W4='W4 admin/import'; W5='W5 surfaces'
-for i in 'SCH-01 SCH-02 SCH-03 SCH-04 SCH-06 SCH-07 SCH-08 SCH-09 SCH-10 SCH-11'.split(): S.setdefault(i,(W1,'In progress','',''))
-for i in 'CRT-02 CRT-03 CRT-05 CRT-06 CRT-07 CRT-09 CRT-10 CRT-12 CMP-08 CMP-09 CMP-10 ADM-10 CRT-11 STF-03'.split(): S.setdefault(i,(W2,'In progress','',''))
-for i in 'SEC-01 SEC-02 SEC-03 MGR-05 SEC-05 SEC-08 SEC-09 MGR-02 MGR-03 MGR-04 MGR-09 MGR-10 UX-09 MGR-12 MGR-14 MGR-15 STF-05'.split(): S.setdefault(i,(W3,'In progress','',''))
-for i in 'ADM-02 ADM-04 ADM-05 ADM-06 ADM-08 CRT-08 IMP-05 IMP-06 IMP-07 IMP-09 IMP-10 IMP-11 IMP-12 QA-07 IMP-13'.split(): S.setdefault(i,(W4,'In progress','',''))
-for i in 'CMP-07 CMP-11 CMP-14 UX-05 STF-01 UX-01 STF-02 STF-06 STF-07 UX-03 UX-04 MGR-06 MGR-07 MGR-11 QA-05 QA-03 QA-04 QA-08 QA-02 ADM-13'.split(): S.setdefault(i,(W5,'In progress','',''))
+FV='Fixed (verified)'
+st('SCH-01', W1, FV, 'parseSessionDate reads ISO dates as local calendar days (sessionDateObj/parseSessionStart/edit compare)', 'scheduling.test (America/New_York) 1/20 → 20/20')
+st('SCH-02 SCH-03 SCH-04 SCH-09 SCH-12', W1, FV, 'Calendar header month detection; trailing AM/PM; trailing At/Via location; multi-day entries flagged', 'scheduling.test')
+st('SCH-06', W1, FV, 'Re-publish keeps admin edits, never resurrects cancelled rows; Changes-to-review box', 'scheduling.test')
+st('SCH-07 SCH-08 SCH-11', W1, FV, 'Admin-only cancel (not certified/past); certified date edits blocked, request snapshots refreshed; roster result synced on correction', 'scheduling.test')
+st('SCH-10', W1, 'Fixed (verified) — partial', 'Waitlist promotion on capacity increase; overlapping same-course double booking blocked. Promotion on request denial not done', 'scheduling.test')
+st('CRT-02 CRT-03 CRT-05 STF-03 CRT-06 CRT-07 CRT-09 CRT-10 CRT-12', W2, FV, 'Per-row expiry; id-targeted voids; resolveCompletion + stable certIdFor; retakes appended; certHistory; certificateBlockReason; append-only reinstatement', 'certs.test 1/15 → 15/15')
+st('CMP-08', W2, 'Fixed (verified) — policy: EPP stays one-time', 'isOneTime(): admin-configured renewal consulted before one NOEXP list', 'certs.test')
+st('CMP-09 ADM-10 CRT-11 CMP-10', W2, FV, 'addIntervalDate shared by status and display; expiryIntervalDays honours location overrides', 'certs.test')
+st('SEC-01 SEC-02 SEC-03 MGR-05 SEC-05 SEC-08 SEC-09', W3, FV, 'Per-user state reset; hop keeps real admin + audited; inactive managers refused; pwSetup bound; URL allow-list; import guards', 'security.test 1/18 → 18/18')
+st('MGR-02 MGR-12', W3, 'Fixed (verified) — policy: locations + reporting chain', 'HASCPolicy uses the app scope resolver; header states the rule', 'security.test (policy 1075 = app 1075)')
+st('MGR-03 MGR-04 MGR-09 MGR-10 UX-09 MGR-14 MGR-15 STF-05', W3, FV, 'Directory drives scope + rename alias; print-all exact set; ambiguous email refused; Deny hidden; scope fixes; cert view guard', 'security.test')
+st('ADM-02 ADM-04 ADM-05 ADM-06 ADM-08', W4, FV, 'Scheduled location rules; validated full backup/restore with pre-restore undo; instructor rename carries sessions; flush on pagehide; archive confirmation', 'admin_import.test 1/26 → 26/26')
+st('CRT-08', W4, 'Fixed (verified) — policy: apply to all with preview', 'Impact preview (N staff change / X overdue) + audit entry before saving a renewal change', 'admin_import.test')
+st('IMP-05 IMP-06 IMP-07 IMP-09 IMP-10 IMP-11 IMP-12 QA-07 IMP-13', W4, FV, '70% coverage + typed confirm; supervisors/emails kept; scoped undo; leading-zero IDs; 1904 dates; Needs-review codes; batch undo; re-check dupes', 'admin_import.test')
+st('CMP-07', W5, FV, 'Initial ART anchors on first completion of each pathway code', 'surfaces.test 1/19 → 19/19')
+st('CMP-11 CMP-14 UX-05', W5, FV, 'complianceSummary() shared by every % surface; info/na excluded; upcoming = today+; Staff fully compliant KPI', 'surfaces.test')
+st('STF-01 UX-01 STF-02 STF-06 STF-07', W5, FV, 'My required trainings list with working actions; quiz never reveals answers; dedup videos; signature must match name', 'surfaces.test')
+st('UX-03 UX-04 MGR-06 MGR-07 MGR-11', W5, FV, 'Manager Out-of-compliance card; Register sorts needs first; scoped video tiles/filters; capped lists say so', 'surfaces.test')
+st('QA-02 ADM-13 QA-03 QA-04 QA-05 QA-08', W5, FV, 'In-app QA suite restored (22 checks); void modal session; KPI caption; archived Set; duplicate key', 'surfaces.test')
+st('IMP-04', L1, FV, 'Expiry years >= 2051 import as No expiration; computed expiries not overrides', 'review1.test IMP-04')
+st('UX-11', 'Lead', FV, 'Phone: wrapping tabs, compact header, instructor cards with Pass/Fail, transcript fits', 'phone.test 2/5 → 5/5')
+st('IMP-08', 'W6 persistence', 'In progress', 'Three-way merge on write/hydrate for ops + docs', '')
 st('SEC-04 STF-04 SEC-06 SEC-10 CMP-15', 'Architecture', "Deferred — needs server auth", 'Inherent to browser-only prototype; requires Supabase Auth/RLS (SUPABASE_MIGRATION.md)', '')
 st('QA-06', 'Ops/data', 'Deferred — data', 'All seeded sessions are past; load the real upcoming calendar', '')
 
@@ -50,6 +68,8 @@ for f in sorted(glob.glob('work/audit/*.md')):
         rows.append((iid, title.replace('|', '/')[:150], sev, owner, status, fix, ver))
 order = {'Critical': 0, 'High': 1, 'Medium': 2, 'Low': 3, '?': 4}
 rows.sort(key=lambda r: (order[r[2]], r[0]))
+rows.append(('PV-01','Admin preview of the Staff portal could write to the real employee record (user request)','High','Lead','Fixed (verified)','staffPreviewReadOnly guard on all entry points and final writers; banner says read-only','preview.test 3/7 → 7/7'))
+rows.append(('R1-01..14','Independent review of batch 1 (work/audit/review1.md)','Medium','Lead','Fixed (verified) — 01,02,04,06,07,08,09,11; 10/05 via W2; 03 via W4 ADM-02; 12,13,14 Low deferred','See commit 9cff283','review1.test'))
 c = collections.Counter(r[2] for r in rows); cs = collections.Counter((r[2], r[4].split(' ')[0]) for r in rows)
 out = ['# HASC LMS — Issue Ledger (production-readiness review, 2026-09-22)', '',
        'Baseline: `HASC_LMS_v5_ATTENDANCE_DESCRIPTIONS_2026-09-22.html`. Regenerate with `python3 tools/ledger.py`.',
