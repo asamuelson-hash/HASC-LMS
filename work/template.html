@@ -8646,7 +8646,7 @@ class Component extends DCLogic {
   _mergeCompletionDelta(seed,delta){ seed=Array.isArray(seed)?seed:[];delta=(delta&&typeof delta==='object')?delta:{};const removed=new Set(Array.isArray(delta.removedSeedKeys)?delta.removedSeedKeys:[]),up=Array.isArray(delta.upserts)?delta.upserts:[],um=new Map(up.map(c=>[this._completionStorageKey(c),c])),seedKeys=new Set();const out=[];seed.forEach(c=>{const k=this._completionStorageKey(c);seedKeys.add(k);if(removed.has(k))return;out.push(um.has(k)?um.get(k):c);});up.forEach(c=>{const k=this._completionStorageKey(c);if(!seedKeys.has(k))out.push(c);});return out; }
   _docsUndoSnapshot(docs){ docs=this._normalizeDocs(docs); const fields={};this._docsPersistFields().forEach(f=>fields[f]=docs[f]);return {v:5,fields,meta:this._docsMetaSnapshot(docs),completionDelta:this._completionDeltaFromDocs(docs.completions,this._seedCompletions())}; }
   _docsFromUndoSnapshot(snap){ if(!snap||snap.v!==5)return null;const base=this._docsDefaults(),fields=snap.fields||{},meta=snap.meta||{};const docs={...base,...meta};this._docsPersistFields().forEach(f=>{if(Object.prototype.hasOwnProperty.call(fields,f))docs[f]=fields[f];});docs.completions=this._mergeCompletionDelta(this._seedCompletions(),snap.completionDelta||{});return this._normalizeDocs(docs); }
-  async _persistAllDocsV5(docs,ping=true){ docs=this._normalizeDocs(docs);const seed=this._seedCompletions(),entries=[[this._docsDeltaKey(),this._completionDeltaFromDocs(docs.completions,seed)],[this._docsMetaKey(),this._docsMetaSnapshot(docs)],[this._docsVersionKey(),5]];this._docsPersistFields().forEach(f=>entries.push([this._docsStoreKey(f),docs[f]]));await this._opsPutMany(entries);try{await this._opsDelete(this._docsSeedKey());}catch(_e){}try{await this._opsPut('docs',null);}catch(_e){}try{localStorage.removeItem('hasc_docs');}catch(_e){}if(ping)this._docsPing();return true; }
+  async _persistAllDocsV5(docs,ping=true){ docs=this._normalizeDocs(docs);const seed=this._seedCompletions(),entries=[[this._docsDeltaKey(),this._completionDeltaFromDocs(docs.completions,seed)],[this._docsMetaKey(),this._docsMetaSnapshot(docs)],[this._docsVersionKey(),5]];this._docsPersistFields().forEach(f=>entries.push([this._docsStoreKey(f),docs[f]]));const rev=this._xtRev();entries.push([this._docsRevKey(),rev],[this._docsLineageKey(),[]]);if(this._docsRev!=null)entries.push(['docs_child_of_'+this._docsRev,1]);await this._opsPutMany(entries);this.__docsLineage=[];this.__docsLoadedRev=rev;if(this._docsBase)this._docsRev=null;try{await this._opsDelete(this._docsSeedKey());}catch(_e){}try{await this._opsPut('docs',null);}catch(_e){}try{localStorage.removeItem('hasc_docs');}catch(_e){}if(ping)this._docsPing();return true; }
   async loadDocs(){
     try{
       const version=await this._opsGet(this._docsVersionKey());
@@ -8654,9 +8654,8 @@ class Component extends DCLogic {
         // The immutable historical archive ships inside the HTML. Always use the archive
         // from THIS build so LMS updates can add/correct seeded history without a stale
         // IndexedDB copy shadowing it. IndexedDB stores only the mutable delta + fields.
-        const seed=this._seedCompletions();
         try{await this._opsDelete(this._docsSeedKey());}catch(_e){}
-        const keys=[this._docsDeltaKey(),this._docsMetaKey(),...this._docsPersistFields().map(f=>this._docsStoreKey(f))],vals=await this._opsGetMany(keys),base=this._docsDefaults(),delta=vals[this._docsDeltaKey()]||{},meta=vals[this._docsMetaKey()]||{};const docs={...base,...meta};this._docsPersistFields().forEach(f=>{const k=this._docsStoreKey(f);if(vals[k]!==null&&vals[k]!==undefined)docs[f]=vals[k];});docs.completions=this._mergeCompletionDelta(seed,delta);return this._normalizeDocs(docs);
+        const keys=[this._docsRevKey(),this._docsLineageKey(),this._docsDeltaKey(),this._docsMetaKey(),...this._docsPersistFields().map(f=>this._docsStoreKey(f))],vals=await this._opsGetMany(keys);this.__docsLoadedRev=vals[this._docsRevKey()]==null?null:vals[this._docsRevKey()];this.__docsLineage=vals[this._docsLineageKey()]||[];return this._docsFromStored(vals);
       }
     }catch(e){if(!this.__docsLoadWarned&&console&&console.warn){this.__docsLoadWarned=true;console.warn('[HASC LMS] Could not read split docs storage; checking legacy data.',e);}}
     let legacy=null,fromLocal=false;try{legacy=await this._opsGet('docs');}catch(_e){}if(!legacy){try{const raw=localStorage.getItem('hasc_docs');if(raw){legacy=JSON.parse(raw);fromLocal=true;}}catch(_e){}}
@@ -8665,8 +8664,56 @@ class Component extends DCLogic {
     return docs;
   }
   _docsPing(){ try{localStorage.setItem('hasc_docs_ping_v3',Date.now()+':'+Math.random().toString(36).slice(2));}catch(e){} }
+  // Cross-tab merge for docs (IMP-08): see _xtMergeRecord. Completions are keyed like their stored delta.
+  _docsRevKey(){ return 'docs_v5_rev'; }
+  _docsMergeSpecs(){ return {completions:{key:c=>this._completionStorageKey(c)||null},completionVoids:{log:true},notifications:{log:true,cap:300},staffChangeHistory:{log:true},reportDispatchLog:{log:true}}; }
+  _docsMerge(b,alt,l,r){ const ks=new Set([...this._docsPersistFields(),'completions']); [b,l,r].forEach(d=>{ if(d)Object.keys(d).forEach(k=>ks.add(k)); }); const m=this._xtMergeRecord([...ks],b,alt,l,r,this._docsMergeSpecs()); m.v=this._normalizeDocs(m.v); return m; }
+  _docsFromStored(vals){ const base=this._docsDefaults(),delta=vals[this._docsDeltaKey()]||{},meta=vals[this._docsMetaKey()]||{},docs={...base,...meta}; this._docsPersistFields().forEach(f=>{const k=this._docsStoreKey(f);if(vals[k]!==null&&vals[k]!==undefined)docs[f]=vals[k];}); docs.completions=this._mergeCompletionDelta(this._seedCompletions(),delta); return this._normalizeDocs(docs); }
+  // Writes are compare-and-swap on a rev token. A write based on rev R first add()s the marker key
+  // '<store>_child_of_R'; add() fails if another tab already wrote on top of R, which aborts the whole
+  // transaction with no read and no callback needed, so a save issued on pagehide still commits
+  // like a plain put. After such a conflict (or when this tab's rev is unknown) the save is redone
+  // as read-merge-write in one transaction. The last 50 revs are kept so old markers can be removed.
+  _xtLineage(baseRev,prior){ const lin=[baseRev].concat(Array.isArray(prior)?prior:[]).filter(x=>x!=null); return {keep:lin.slice(0,50),drop:lin.slice(50)}; }
+  _docsLineageKey(){ return 'docs_v5_lineage'; }
+  _docsMergePut(local,prev){ return this._docsTryPut(local,prev,true).then(r=>r||this._docsTryPut(local,prev,false)); }
+  _docsTryPut(local,prev,tryOptimistic){ return this._opsDB().then(db=>new Promise((res,rej)=>{ const base=this._docsBase,alt=this._docsAlt,rev0=this._docsRev,F=this._docsPersistFields(),RK=this._docsRevKey(),LK=this._docsLineageKey();
+    const tx=db.transaction('kv','readwrite'),st=tx.objectStore('kv'); let out=null,conflict=false; const fail=e=>{ try{tx.abort();}catch(_e){} rej(e); };
+    const plan=(merged,ref)=>{ const force=prev===null||!ref,entries=[];
+      F.forEach(f=>{ if(force||merged[f]!==ref[f])entries.push([this._docsStoreKey(f),merged[f]]); });
+      if(force||merged.completions!==ref.completions)entries.push([this._docsDeltaKey(),this._completionDeltaFromDocs(merged.completions,this._seedCompletions())]);
+      const meta=this._docsMetaSnapshot(merged); let metaChanged=force; if(!metaChanged){ try{ metaChanged=JSON.stringify(meta)!==JSON.stringify(this._docsMetaSnapshot(ref)); }catch(_e){ metaChanged=true; } } if(metaChanged)entries.push([this._docsMetaKey(),meta]);
+      return entries; };
+    const commit=(m,entries,baseRev,prior)=>{ if(!entries.length){ out={merged:m.v,fromRemote:!!m.fromRemote,rev:baseRev,wrote:false,lineage:prior}; return; }
+      const rev=this._xtRev(),lin=this._xtLineage(baseRev,prior); entries.push([RK,rev],[LK,lin.keep]); entries.forEach(x=>st.put(x[1],x[0])); lin.drop.forEach(r=>st.delete('docs_child_of_'+r));
+      out={merged:m.v,fromRemote:!!m.fromRemote,rev,wrote:true,lineage:lin.keep}; };
+    tx.oncomplete=()=>{ if(out)this.__docsLineage=out.lineage; res(out); }; tx.onerror=()=>{ if(!conflict)rej(tx.error); }; tx.onabort=()=>{ if(conflict)res(null); else rej(tx.error||new Error('IndexedDB write aborted')); };
+    try{
+      if(tryOptimistic&&base&&rev0!=null){ const m=alt?this._docsMerge(base,alt,local,base):{v:local,fromRemote:false},entries=plan(m.v,base);
+        if(entries.length){ const cas=st.add(1,'docs_child_of_'+rev0); cas.onerror=()=>{ conflict=true; }; commit(m,entries,rev0,this.__docsLineage); return; } }
+      const q=st.get(RK),ql=st.get(LK);
+      q.onsuccess=()=>{ try{ const cur=q.result==null?null:q.result;
+          ql.onsuccess=()=>{ try{ const prior=ql.result||[],mark=()=>{ if(cur!=null)st.put(1,'docs_child_of_'+cur); };
+              if(!base){ const e=plan(local,prev||null); if(e.length)mark(); commit({v:local},e,cur,prior); return; }
+              if(rev0!=null&&cur===rev0){ const m=alt?this._docsMerge(base,alt,local,base):{v:local,fromRemote:false},e=plan(m.v,base); if(e.length)mark(); commit(m,e,cur,prior); return; }
+              const keys=[this._docsDeltaKey(),this._docsMetaKey(),...F.map(f=>this._docsStoreKey(f))],vals={}; let left=keys.length;
+              keys.forEach(k=>{ const g=st.get(k); g.onsuccess=()=>{ vals[k]=g.result===undefined?null:g.result; if(--left===0){ try{ const remote=this._docsFromStored(vals),m=this._docsMerge(base,alt,local,remote),e=plan(m.v,remote); if(e.length)mark(); commit(m,e,cur,prior); }catch(err){fail(err);} } }; g.onerror=()=>fail(g.error||tx.error); });
+            }catch(err){fail(err);} };
+        }catch(err){fail(err);} };
+      q.onerror=()=>fail(q.error||tx.error); ql.onerror=()=>fail(ql.error||tx.error);
+    }catch(err){ fail(err); } })); }
+  _afterDocsWrite(r,local,docsParam){ if(!r)return; this._docsRev=r.rev; if(!this._docsBase)return; if(r.fromRemote)this._docsAdopt(r.merged,local,docsParam); else { this._docsBase=local; this._docsAlt=null; } }
+  // Show the merged docs (and the roster replayed from them), keeping any later local change.
+  _docsAdopt(merged,local,docsParam){ const cur=this.state.docs; let next=merged;
+    if(cur&&cur!==local&&cur!==docsParam){ next=this._docsMerge(local,null,cur,merged).v; this.__docsRebased={from:cur,to:next}; } else this.__docsRebased=null;
+    this._docsBase=merged; this._docsAlt=local;
+    const old=this.state.roster||[],roster=this.applyCompletionsToRoster(this.applyVoidsToRoster(old,next),next); this._opsRebaseRoster(old,roster);
+    this._hydratingOps=true; this.setState({docs:next,roster},()=>{ this._hydratingOps=false; this.__memo={}; }); }
+  // Another tab saved docs: merge them in (writing back only if this tab has unsaved changes).
+  async _docsSyncRun(){ if(!this._dataReady||!this._docsBase)return; const cur=this.state.docs; const r=await this._docsMergePut(cur,undefined); this._afterDocsWrite(r,cur,cur); if(r&&r.wrote)this._docsPing(); }
   _persistDocsNow(docs,ping=true,prevDocs){
-    const snapshot=this._normalizeDocs(docs),prev=prevDocs===undefined?this.state.docs:prevDocs;const run=async()=>{const entries=[];this._docsPersistFields().forEach(f=>{if(!prev||snapshot[f]!==prev[f])entries.push([this._docsStoreKey(f),snapshot[f]]);});if(!prev||snapshot.completions!==prev.completions)entries.push([this._docsDeltaKey(),this._completionDeltaFromDocs(snapshot.completions,this._seedCompletions())]);const meta=this._docsMetaSnapshot(snapshot),prevMeta=prev?this._docsMetaSnapshot(prev):null;let metaChanged=!prevMeta;try{if(!metaChanged)metaChanged=JSON.stringify(meta)!==JSON.stringify(prevMeta);}catch(_e){metaChanged=true;}if(metaChanged)entries.push([this._docsMetaKey(),meta]);if(entries.length)await this._opsPutMany(entries);if(ping&&entries.length)this._docsPing();this.__docsPersistWarned=false;return true;};
+    const snapshot=this._normalizeDocs(docs),prev=prevDocs===undefined?this.state.docs:prevDocs;
+    const run=async()=>{ const rb=this.__docsRebased; let local=snapshot; if(rb&&(rb.from===docs||rb.from===snapshot)&&this.state.docs===rb.to)local=rb.to; const r=await this._docsMergePut(local,prev); this._afterDocsWrite(r,local,docs); if(ping&&r&&r.wrote)this._docsPing(); this.__docsPersistWarned=false; return true; };
     this.__docsPersistChain=(this.__docsPersistChain||Promise.resolve()).catch(()=>{}).then(run).catch(e=>{if(!this.__docsPersistWarned&&console&&console.warn){this.__docsPersistWarned=true;console.warn('[HASC LMS] Docs persistence failed; current-session data remains in memory.',e);}return false;});return this.__docsPersistChain;
   }
   // ===== Staff Change History (Admin review) — append-only, persisted in docs.staffChangeHistory =====
@@ -12691,27 +12738,142 @@ class Component extends DCLogic {
   _opsDB(){ if(this.__opsDBP)return this.__opsDBP; this.__opsDBP=new Promise((res,rej)=>{ if(!window.indexedDB){rej(new Error('IndexedDB unavailable'));return;} const r=indexedDB.open('hasc_lms_state_v3',1); r.onupgradeneeded=()=>{if(!r.result.objectStoreNames.contains('kv'))r.result.createObjectStore('kv');}; r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error||new Error('IndexedDB open failed')); }); return this.__opsDBP; }
   async _opsGet(key){ const db=await this._opsDB(); return new Promise((res,rej)=>{const tx=db.transaction('kv','readonly'),q=tx.objectStore('kv').get(key);q.onsuccess=()=>res(q.result||null);q.onerror=()=>rej(q.error||tx.error);}); }
   async _opsGetMany(keys){ const db=await this._opsDB(); return new Promise((res,rej)=>{const tx=db.transaction('kv','readonly'),st=tx.objectStore('kv'),out={},list=[...new Set(keys||[])];if(!list.length){res(out);return;}let left=list.length;list.forEach(k=>{const q=st.get(k);q.onsuccess=()=>{out[k]=q.result===undefined?null:q.result;if(--left===0)res(out);};q.onerror=()=>rej(q.error||tx.error);});tx.onerror=()=>rej(tx.error);tx.onabort=()=>rej(tx.error);}); }
-  async _opsPut(key,value){ const db=await this._opsDB(); return new Promise((res,rej)=>{const tx=db.transaction('kv','readwrite');tx.objectStore('kv').put(value,key);tx.oncomplete=()=>res(true);tx.onerror=()=>rej(tx.error);tx.onabort=()=>rej(tx.error);}); }
+  async _opsPut(key,value){
+    // Direct whole-record writes (applyImport, undo, rollback) are merged like the debounced save.
+    if(key==='operational'&&this._opsBase&&value&&typeof value==='object')return this._enqueueOps(async()=>{ await this._opsMergePut(value); const b={...this._opsBase}; this._opsKeys().forEach(k=>{ if(value[k]!==undefined)b[k]=value[k]; }); this._opsBase=b; this._opsRev=null; return true; });
+    const db=await this._opsDB();
+    if(key==='operational'&&value&&typeof value==='object'){ value={...value,rev:this._xtRev()}; this.__opsPlainRev=value.rev;
+      return new Promise((res,rej)=>{const tx=db.transaction('kv','readwrite'),st=tx.objectStore('kv'),q=st.get('operational');st.put(value,key);q.onsuccess=()=>{ const r=q.result&&q.result.rev; if(r!=null)st.put(1,'ops_child_of_'+r); };tx.oncomplete=()=>res(true);tx.onerror=()=>rej(tx.error);tx.onabort=()=>rej(tx.error);}); } return new Promise((res,rej)=>{const tx=db.transaction('kv','readwrite');tx.objectStore('kv').put(value,key);tx.oncomplete=()=>res(true);tx.onerror=()=>rej(tx.error);tx.onabort=()=>rej(tx.error);}); }
   async _opsDelete(key){ const db=await this._opsDB(); return new Promise((res,rej)=>{const tx=db.transaction('kv','readwrite');tx.objectStore('kv').delete(key);tx.oncomplete=()=>res(true);tx.onerror=()=>rej(tx.error);tx.onabort=()=>rej(tx.error);}); }
   async _opsPutMany(entries){ const rows=(entries||[]).filter(x=>x&&x.length>=2);if(!rows.length)return true;const db=await this._opsDB();return new Promise((res,rej)=>{const tx=db.transaction('kv','readwrite'),st=tx.objectStore('kv');rows.forEach(x=>st.put(x[1],x[0]));tx.oncomplete=()=>res(true);tx.onerror=()=>rej(tx.error);tx.onabort=()=>rej(tx.error);}); }
   _opsSnapshot(extra){ return Object.assign({roster:this.state.roster||[],sessions:this.state.sessions||[],requests:this.state.requests||[],notifQueue:this.state.notifQueue||[],cancelledSessions:this.state.cancelledSessions||[],commLog:this.state.commLog||[],reminderSettings:this.state.reminderSettings||{},notifPrefs:this.state.notifPrefs||{},notifTemplates:this.state.notifTemplates||{},twilioReadiness:this.state.twilioReadiness||{},instructors:this.state.instructors||[],instructorRosterV:this.state.instructorRosterV||0,auditLog:(this.state.auditLog||[]).slice(0,20000),locations:this.state.locations||[],updatedAt:new Date().toISOString()},extra||{}); }
-  _flushPendingPersist(){ if(!this._dataReady) return; if(this._opsPersistT){ clearTimeout(this._opsPersistT); this._opsPersistT=null; try{ this._persistOperationalState(); }catch(e){} }
+  _flushPendingPersist(){ if(!this._dataReady) return; if(this._opsPersistT){ clearTimeout(this._opsPersistT); this._opsPersistT=null; try{ this._opsPersistRun(true); }catch(e){} }
     if(this._storeDirty&&window.HASCStore&&typeof window.HASCStore.get==='function'){ this._storeDirty=false; try{ this._opsPut('sharedStore',window.HASCStore.get()).catch(()=>{}); }catch(e){} } }
   _scheduleOperationalPersist(){
     if(this._opsPersistT) clearTimeout(this._opsPersistT);
     this._opsPersistT=setTimeout(()=>{ this._opsPersistT=null; this._persistOperationalState(); },800);
   }
-  async _persistOperationalState(){
-    if(!this._dataReady||this._hydratingOps) return;
-    const snap=this._opsSnapshot();
+  // ===== Cross-tab persistence (IMP-08) =====
+  // Every open tab writes to the same IndexedDB. Each write is a three-way merge done inside ONE
+  // readwrite transaction (read then put, so no other tab can interleave): base = what this tab last
+  // loaded or wrote (in state form), local = this tab now, remote = the stored copy. State is updated
+  // immutably, so `local!==base` per key and per row marks this tab's own changes; anything this tab
+  // did not change is taken from the stored copy. alt = this tab's value just before it adopted a
+  // merge: an async flow that computed from it (applyImport, undo) must not look like it reverted the
+  // other tab's rows. A per-store rev token lets an uncontended write skip the merge.
+  _xtRev(){ return Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,10); }
+  _xtPlain(o){ return !!o&&typeof o==='object'&&!Array.isArray(o); }
+  _xtSameList(a,b){ if(a===b)return true; if(!Array.isArray(a)||!Array.isArray(b)||a.length!==b.length)return false; for(let i=0;i<a.length;i++)if(a[i]!==b[i])return false; return true; }
+  _xtKeyFn(spec,arrs){ if(spec&&spec.key)return spec.key; for(const f of ['id','voidId','instructorId']){ if(arrs.every(a=>a.every(x=>x&&typeof x==='object'&&x[f]!=null&&x[f]!=='')))return x=>String(x[f]); } return null; }
+  // [key,row] pairs; a repeated key gets an occurrence suffix so duplicate rows are kept, not collapsed.
+  _xtKeyed(a,kf){ const out=[],n=new Map(); for(const x of a||[]){ const k0=kf(x); if(k0==null||k0==='')return null; const c=n.get(k0)||0; n.set(k0,c+1); out.push([c?k0+'\u0001'+c:k0,x]); } return out; }
+  // Rows with a stable id: start from remote, overlay rows this tab changed, drop rows it deleted,
+  // add rows it created (appended; prepended for newest-first logs). A row the other tab deleted
+  // stays deleted even if this tab edited it.
+  _xtMergeRows(b,alt,l,r,kf,log,cap){
+    const bk=this._xtKeyed(b,kf),ak=alt?this._xtKeyed(alt,kf):null,lk=this._xtKeyed(l,kf),rk=this._xtKeyed(r,kf); if(!bk||!lk||!rk||(alt&&!ak))return null;
+    const bm=new Map(bk),am=ak?new Map(ak):null,lm=new Map(lk),same=(k,x)=>bm.get(k)===x||(!!am&&am.get(k)===x),known=k=>bm.has(k)||(!!am&&am.has(k)),delLocal=k=>bm.has(k)&&(!am||am.has(k));
+    const out=[],add=[],seen=new Set(); let fromLocal=false;
+    for(const [k,x] of rk){ seen.add(k); const lx=lm.get(k); if(lx===undefined){ if(delLocal(k)){fromLocal=true;continue;} out.push(x); continue; } if(lx===x||same(k,lx)){out.push(x);continue;} out.push(lx); fromLocal=true; }
+    for(const [k,x] of lk){ if(seen.has(k)||known(k))continue; add.push(x); fromLocal=true; }
+    let v=log?add.concat(out):out.concat(add); if(cap&&v.length>cap)v=v.slice(0,cap);
+    return {v,fromLocal,fromRemote:!this._xtSameList(v,l)}; }
+  // Append-only log without ids (audit trail): entries this tab added (by identity) go first.
+  _xtMergeIdLog(b,alt,l,r,cap){ const known=new Set(b||[]); (alt||[]).forEach(x=>known.add(x)); const add=(l||[]).filter(x=>!known.has(x)); let v=add.length?add.concat(r||[]):(r||[]); if(cap&&v.length>cap)v=v.slice(0,cap); return {v,fromLocal:add.length>0,fromRemote:!this._xtSameList(v,l)}; }
+  // Arrays of primitives (archived ids): remote + added locally - removed locally.
+  _xtMergeSet(b,alt,l,r){ const S=a=>new Set((a||[]).map(String)),bs=S(b),as=alt?S(alt):null,ls=S(l),seen=new Set(),out=[]; let fromLocal=false;
+    for(const x of r||[]){ const k=String(x); if(seen.has(k))continue; seen.add(k); if(!ls.has(k)&&bs.has(k)&&(!as||as.has(k))){fromLocal=true;continue;} out.push(x); }
+    for(const x of l||[]){ const k=String(x); if(seen.has(k)||bs.has(k)||(as&&as.has(k)))continue; seen.add(k); out.push(x); fromLocal=true; }
+    const os=S(out); return {v:out,fromLocal,fromRemote:os.size!==ls.size||[...ls].some(k=>!os.has(k))}; }
+  // Settings maps: per-key overlay of the keys this tab changed or removed.
+  _xtMergeObj(b,alt,l,r){ const out={...r}; let fromLocal=false;
+    for(const k of Object.keys(l)){ const lv=l[k]; if(lv===b[k]||(alt&&lv===alt[k])||lv===r[k])continue; out[k]=lv; fromLocal=true; }
+    for(const k of Object.keys(b)){ if(!(k in l)&&(!alt||k in alt)&&(k in out)){ delete out[k]; fromLocal=true; } }
+    const ok=Object.keys(out); return {v:out,fromLocal,fromRemote:ok.length!==Object.keys(l).length||ok.some(k=>out[k]!==l[k])}; }
+  _xtMergeValue(b,alt,l,r,spec){
+    if(l===undefined)return {v:r,fromLocal:false,fromRemote:r!==undefined};
+    if(r===undefined||r===null)return {v:l,fromLocal:l!==null,fromRemote:false};
+    if(l===b||(alt!==undefined&&l===alt))return {v:r,fromLocal:false,fromRemote:r!==l};
+    if(Array.isArray(l)&&Array.isArray(r)){ const B=Array.isArray(b)?b:[],A=Array.isArray(alt)?alt:null;
+      if(spec&&spec.idlog)return this._xtMergeIdLog(B,A,l,r,spec.cap);
+      const arrs=[B,l,r].concat(A?[A]:[]);
+      if(arrs.every(a=>a.every(x=>x===null||typeof x!=='object')))return this._xtMergeSet(B,A,l,r);
+      const kf=this._xtKeyFn(spec,arrs),m=kf?this._xtMergeRows(B,A,l,r,kf,spec&&spec.log,spec&&spec.cap):null; if(m)return m;
+      return {v:l,fromLocal:true,fromRemote:false}; }
+    if(this._xtPlain(l)&&this._xtPlain(r))return this._xtMergeObj(this._xtPlain(b)?b:{},this._xtPlain(alt)?alt:null,l,r);
+    return {v:l,fromLocal:true,fromRemote:false}; }
+  _xtMergeRecord(keys,b,alt,l,r,specs){ const v={}; let fromLocal=false,fromRemote=false;
+    for(const k of keys){ const m=this._xtMergeValue(b?b[k]:undefined,alt?alt[k]:undefined,l[k],r?r[k]:undefined,specs[k]); if(m.v!==undefined)v[k]=m.v; if(m.fromLocal)fromLocal=true; if(m.fromRemote)fromRemote=true; }
+    return {v,fromLocal,fromRemote}; }
+  // ---- operational state (roster, sessions, requests, queue, audit trail, …) ----
+  _opsKeys(){ return ['roster','sessions','requests','notifQueue','cancelledSessions','commLog','reminderSettings','notifPrefs','notifTemplates','twilioReadiness','instructors','instructorRosterV','auditLog','locations']; }
+  _opsMergeSpecs(){ return {auditLog:{idlog:true,cap:20000},commLog:{log:true}}; }
+  _opsLocal(){ const o={}; this._opsKeys().forEach(k=>{ if(this.state[k]!==undefined)o[k]=this.state[k]; }); return o; }
+  _opsDirty(){ const b=this._opsBase; return !!b&&this._opsKeys().some(k=>this.state[k]!==undefined&&this.state[k]!==b[k]); }
+  _enqueueOps(fn){ const p=(this.__opsChain||Promise.resolve()).catch(()=>{}).then(fn); this.__opsChain=p.catch(()=>{}); return p; }
+  // Stored (or merged) record -> state form. Values that are this tab's own are kept as they are.
+  _opsHydrated(rec,local){ const o={},s=this.state,docs=s.docs||{};
+    this._opsKeys().forEach(k=>{ const v=rec[k]; if(v===undefined||v===null)return; if(local&&v===local[k]){o[k]=v;return;}
+      if(k==='roster'){ if(Array.isArray(v))o.roster=this.applyCompletionsToRoster(this.applyVoidsToRoster(v,docs),docs); }
+      else if(k==='requests'){ if(Array.isArray(v))o.requests=this.normalizeRequests(v); }
+      else if(k==='notifQueue'){ if(Array.isArray(v))o.notifQueue=v.map(r=>this._normalizeQueueJob(r)); }
+      else if(k==='reminderSettings'||k==='twilioReadiness'){ if(typeof v==='object')o[k]={...(s[k]||{}),...v}; }
+      else if(['sessions','cancelledSessions','commLog','instructors','auditLog','locations'].includes(k)){ if(Array.isArray(v))o[k]=v; }
+      else o[k]=v; });
+    return o; }
+  // Compare-and-swap write of the operational record (see _xtLineage); rev/opsLineage live in the record.
+  _opsMergePut(local){ return this._opsTryPut(local,true).then(r=>r||this._opsTryPut(local,false)); }
+  _opsTryPut(local,tryOptimistic){ return this._opsDB().then(db=>new Promise((res,rej)=>{ const base=this._opsBase,alt=this._opsAlt,rev0=this._opsRev,keys=this._opsKeys(),specs=this._opsMergeSpecs();
+    const tx=db.transaction('kv','readwrite'),st=tx.objectStore('kv'); let out=null,conflict=false;
+    const extraOf=o=>{ const e={}; Object.keys(o||{}).forEach(k=>{ if(!keys.includes(k))e[k]=o[k]; }); return e; };
+    const put=(storedExtra,m,baseRev)=>{ const le=extraOf(local),lin=this._xtLineage(baseRev,storedExtra&&storedExtra.opsLineage),rec=Object.assign({},storedExtra,le,m.v,{updatedAt:le.updatedAt||new Date().toISOString(),rev:this._xtRev(),opsLineage:lin.keep}); if(Array.isArray(rec.auditLog)&&rec.auditLog.length>20000)rec.auditLog=rec.auditLog.slice(0,20000);
+      st.put(rec,'operational'); lin.drop.forEach(r=>st.delete('ops_child_of_'+r)); out={merged:m.v,fromRemote:!!m.fromRemote,rev:rec.rev,updatedAt:rec.updatedAt,extra:extraOf(rec)}; };
+    const fail=err=>{ try{tx.abort();}catch(_e){} rej(err); };
+    tx.oncomplete=()=>{ if(out)this.__opsExtra=out.extra; res(out); }; tx.onerror=()=>{ if(!conflict)rej(tx.error); }; tx.onabort=()=>{ if(conflict)res(null); else rej(tx.error||new Error('IndexedDB write aborted')); };
     try{
-      await this._opsPut('operational',snap);
+      if(tryOptimistic&&base&&rev0!=null&&this.__opsExtra){ const cas=st.add(1,'ops_child_of_'+rev0); cas.onerror=()=>{ conflict=true; }; put(this.__opsExtra,alt?this._xtMergeRecord(keys,base,alt,local,base,specs):{v:local,fromRemote:false},rev0); return; }
+      const q=st.get('operational');
+      q.onsuccess=()=>{ try{ const stored=q.result||null,cur=stored&&stored.rev!=null?stored.rev:null,fast=!!base&&rev0!=null&&cur===rev0;
+          if(cur!=null)st.put(1,'ops_child_of_'+cur);
+          put(extraOf(stored),(!base||!stored||(fast&&!alt))?{v:local,fromRemote:false}:this._xtMergeRecord(keys,base,alt,local,fast?base:stored,specs),cur);
+        }catch(err){ fail(err); } };
+      q.onerror=()=>fail(q.error||tx.error);
+    }catch(err){ fail(err); } })); }
+  // After a merged write: show the merged result, keeping any change made while the write was in flight.
+  _opsAdopt(merged,local){ const keys=this._opsKeys(),H=this._opsHydrated(merged,local),cur=this._opsLocal(),m=this._xtMergeRecord(keys,local,null,cur,H,this._opsMergeSpecs()),patch={};
+    keys.forEach(k=>{ if(m.v[k]!==undefined&&m.v[k]!==cur[k])patch[k]=m.v[k]; });
+    this._opsBase=Object.assign({},local,H); this._opsAlt=local;
+    if(!Object.keys(patch).length){ if(m.fromLocal)this._scheduleOperationalPersist(); return; }
+    this._hydratingOps=true; this.setState(patch,()=>{ this._hydratingOps=false; this.__memo={}; if(m.fromLocal)this._scheduleOperationalPersist(); }); }
+  // A docs reload re-derives roster rows; those rows are not this tab's own operational edits.
+  _opsRebaseRoster(old,next){ if(!Array.isArray(old)||!Array.isArray(next)||old===next)return; const sw=new Map(); old.forEach((r,i)=>{ if(next[i]!==r)sw.set(r,next[i]); }); if(!sw.size)return;
+    const fix=o=>{ if(!o||!Array.isArray(o.roster))return o; let ch=false; const ro=o.roster.map(r=>{ const n=sw.get(r); if(n){ch=true;return n;} return r; }); return ch?{...o,roster:ro}:o; };
+    this._opsBase=fix(this._opsBase); this._opsAlt=fix(this._opsAlt); }
+  async _opsPersistRun(flush){
+    if(!this._dataReady)return; if(this._hydratingOps&&!flush){ this._scheduleOperationalPersist(); return; }
+    if(this._opsBase&&this._opsRev!=null&&!this._opsDirty())return;
+    const local=this._opsLocal();
+    try{
+      const r=await this._opsMergePut(local); this._opsRev=r.rev;
+      if(this._opsBase){ if(r.fromRemote)this._opsAdopt(r.merged,local); else { this._opsBase=local; this._opsAlt=null; } }
       // Migration is non-destructive: remove legacy quota-heavy copies only after the
       // complete snapshot is safely committed to IndexedDB.
-      try{localStorage.removeItem('hasc_import_roster_v2');localStorage.removeItem('hasc_import_ops_v2');localStorage.setItem('hasc_import_ops_ping_v3',snap.updatedAt);}catch(_e){}
+      try{localStorage.removeItem('hasc_import_roster_v2');localStorage.removeItem('hasc_import_ops_v2');localStorage.setItem('hasc_import_ops_ping_v3',r.updatedAt+'|'+r.rev);}catch(_e){}
       this.__opsPersistWarned=false; this.__opsPersistUserWarned=false;
     }catch(e){ if(!this.__opsPersistWarned&&console&&console.warn){this.__opsPersistWarned=true;console.warn('Operational state persistence is unavailable; current-session data remains in memory.');} if(!this.__opsPersistUserWarned){this.__opsPersistUserWarned=true;this.toast('Storage warning: roster/session changes are active only in this tab and may be lost on reload.');} }
   }
+  // Another tab saved: merge if this tab has unsaved changes, otherwise take the stored copy.
+  async _opsSyncFromStore(){
+    if(!this._dataReady||!this._opsBase)return;
+    const stored=await this._opsGet('operational'); if(!stored||!Array.isArray(stored.roster))return;
+    if(stored.rev!=null&&stored.rev===this._opsRev)return;
+    if(this._opsPersistT||this._opsDirty()){ if(this._opsPersistT){clearTimeout(this._opsPersistT);this._opsPersistT=null;} return this._opsPersistRun(); }
+    const local=this._opsLocal(),H=this._opsHydrated(stored,null),patch={};
+    this._opsKeys().forEach(k=>{ if(H[k]!==undefined&&H[k]!==local[k])patch[k]=H[k]; });
+    this._opsBase=Object.assign({},local,H); this._opsAlt=null; this._opsRev=stored.rev!=null?stored.rev:null; { const ex={},ks=this._opsKeys(); Object.keys(stored).forEach(k=>{ if(!ks.includes(k))ex[k]=stored[k]; }); this.__opsExtra=ex; }
+    if(Object.keys(patch).length){ this._hydratingOps=true; this.setState(patch,()=>{ this._hydratingOps=false; this.__memo={}; }); }
+  }
+  _persistOperationalState(){ return this._enqueueOps(()=>this._opsPersistRun()); }
   async _handleStorageSync(e){
     if(!e||!['hasc_import_ops_ping_v3','hasc_import_roster_v2','hasc_import_ops_v2','hasc_docs_ping_v3','hasc_docs','hasc_scorm_courses_v1','hasc_scorm_progress_v1','hasc_course_library_v1'].includes(e.key)) return;
     // Course Library and SCORM catalog changes have their own lightweight cross-tab keys.
@@ -12720,21 +12882,12 @@ class Component extends DCLogic {
     if(e.key==='hasc_scorm_progress_v1'){ this.__scormProgressLoaded=false; this.__scormProgressCache=null; this.setState(st=>({storeVer:(st.storeVer||0)+1})); return; }
     try{
       if(e.key==='hasc_docs_ping_v3'||e.key==='hasc_docs'){
-        let loaded=null;
         // hasc_docs is accepted only as a legacy cross-tab migration signal.
-        if(e.key==='hasc_docs'&&e.newValue){try{loaded=this._normalizeDocs(JSON.parse(e.newValue));await this._persistAllDocsV5(loaded,false);localStorage.removeItem('hasc_docs');}catch(_legacyErr){}}
-        if(!loaded)loaded=await this.loadDocs();
-        const mig=this.migrateCertModel(loaded); const docs=mig.docs;
-        const roster=this.applyCompletionsToRoster(this.applyVoidsToRoster(this.state.roster||[],docs),docs);
-        this._hydratingOps=true; this.setState({docs,roster},()=>{ this._hydratingOps=false; this.__memo={}; }); return;
+        if(e.key==='hasc_docs'&&e.newValue){try{const legacy=this._normalizeDocs(JSON.parse(e.newValue));await this._persistAllDocsV5(legacy,false);localStorage.removeItem('hasc_docs');}catch(_legacyErr){}}
+        const p=(this.__docsPersistChain||Promise.resolve()).catch(()=>{}).then(()=>this._docsSyncRun()); this.__docsPersistChain=p.then(()=>true,()=>false); await p; return;
       }
-      let saved=null;
-      if(e.key==='hasc_import_ops_ping_v3') saved=await this._opsGet('operational');
-      else { let rr=null,oo={}; try{rr=JSON.parse(localStorage.getItem('hasc_import_roster_v2')||'null');oo=JSON.parse(localStorage.getItem('hasc_import_ops_v2')||'{}')||{};}catch(_e){} if(Array.isArray(rr)||oo&&typeof oo==='object')saved=Object.assign({},oo,{roster:Array.isArray(rr)?rr:(this.state.roster||[])}); if(saved)try{await this._opsPut('operational',saved);}catch(_e){} }
-      if(!saved||!Array.isArray(saved.roster))return;
-      const roster=this.applyCompletionsToRoster(this.applyVoidsToRoster(saved.roster,this.state.docs||{}),this.state.docs||{});
-      this._hydratingOps=true;
-      this.setState({roster,sessions:Array.isArray(saved.sessions)?saved.sessions:this.state.sessions,requests:Array.isArray(saved.requests)?this.normalizeRequests(saved.requests):this.state.requests,notifQueue:Array.isArray(saved.notifQueue)?saved.notifQueue.map(r=>this._normalizeQueueJob(r)):this.state.notifQueue,cancelledSessions:Array.isArray(saved.cancelledSessions)?saved.cancelledSessions:this.state.cancelledSessions,commLog:Array.isArray(saved.commLog)?saved.commLog:this.state.commLog,reminderSettings:saved.reminderSettings?{...this.state.reminderSettings,...saved.reminderSettings}:this.state.reminderSettings,notifPrefs:saved.notifPrefs||this.state.notifPrefs,notifTemplates:saved.notifTemplates||this.state.notifTemplates,twilioReadiness:saved.twilioReadiness?{...this.state.twilioReadiness,...saved.twilioReadiness}:this.state.twilioReadiness},()=>{ this._hydratingOps=false; this.__memo={}; });
+      if(e.key!=='hasc_import_ops_ping_v3'){ let rr=null,oo={},saved=null; try{rr=JSON.parse(localStorage.getItem('hasc_import_roster_v2')||'null');oo=JSON.parse(localStorage.getItem('hasc_import_ops_v2')||'{}')||{};}catch(_e){} if(Array.isArray(rr)||oo&&typeof oo==='object')saved=Object.assign({},oo,{roster:Array.isArray(rr)?rr:(this.state.roster||[])}); if(saved)try{await this._opsPut('operational',saved);}catch(_e){} }
+      await this._enqueueOps(()=>this._opsSyncFromStore());
     }catch(err){ if(!this.__opsSyncWarned&&console&&console.warn){this.__opsSyncWarned=true;console.warn('Cross-tab LMS synchronization is temporarily unavailable.');} }
   }
   componentWillUnmount(){
@@ -14741,7 +14894,9 @@ class Component extends DCLogic {
       this.__savedLocations=(Array.isArray(ops.locations)&&ops.locations.length)?ops.locations:null;
       this._hydratingOps=true; this._dataReady=true;
       this.setState(next,()=>{
-        this._hydratingOps=false; this._bootNotifyEngine(); this._scheduleNotificationConfigSync();
+        this._hydratingOps=false;
+        this._opsBase=this._opsLocal(); this._opsAlt=null; this._opsRev=this.__opsPlainRev||((src&&src===saved&&saved.rev!=null)?saved.rev:null); { const ex={},ks=this._opsKeys(); Object.keys(ops||{}).forEach(k=>{ if(!ks.includes(k))ex[k]=ops[k]; }); this.__opsExtra=ex; } this._docsBase=loaded; this._docsAlt=null; this._docsRev=this.__docsLoadedRev!=null?this.__docsLoadedRev:null;
+        this._bootNotifyEngine(); this._scheduleNotificationConfigSync();
         if(mig.changed||activeSync.changed||completionSync.changed||mockScrub.changed||onlineTestScrub.changed||onlineActivityScrub.changed) this._persistDocsNow(docs,true,loaded);
         (mig.audits||[]).forEach(a=>this.logAudit(a.action,{staff:a.staff||'—',target:a.target,prev:a.prev,next:a.next,notes:a.notes,sev:'Compliance',relatedId:a.relatedId||''}));
         if(activeSync.changed){ this.logAudit('Authoritative active roster + Main/SDCH completion snapshots applied',{target:'Aug. 9, 2026 Main + SDCH Reports',prev:'Legacy roster/completion state',next:activeSync.activeCount+' active staff · '+((docs&&docs.courseCompletionReferenceCount)||0)+' reported completion dates',notes:activeSync.added+' current staff added if missing · '+activeSync.inactivated+' historical/non-current records marked inactive · '+activeSync.reactivated+' current records reactivated · '+activeSync.completionDates+' completion dates refreshed · '+activeSync.completionClears+' stale covered-course values cleared · '+activeSync.superseded+' conflicting pre-snapshot completion records superseded · sources: MainReportWITHCOLORS_NewChart_2026-08-09-09-00-02.xlsx + SDCHDailyReportWITHCOLORS_NewChart_2026-08-09-07-00-04.xlsx',sev:'Compliance',relatedId:'active-completion-snapshot-2026-08-09'}); }
@@ -14752,6 +14907,8 @@ class Component extends DCLogic {
         if(clearedOldSessionRequests) this.logAudit('Old session requests removed from active queue',{target:'Session Requests',prev:clearedOldSessionRequests+' stale/past request record(s)',next:'Removed from active request data',notes:'One-time v39 cleanup removed legacy-obsolete requests plus pending/waitlisted requests tied to sessions before today. Historical registration/attendance remains in Scheduled Sessions.',sev:'Info',relatedId:'old-session-request-cleanup-v39'});
         if(scipInstructorCorrectionCount) this.logAudit('SCIP instructor assignments corrected',{target:'SCIP session records',next:'SCIP Recertification — Yevgeniy Tseytin; SCIP Day 1/2 — Yevgeniy Tseytin, Maria Ghenzeli',notes:scipInstructorCorrectionCount+' existing active/cancelled session record(s) updated once in v38.',sev:'Info',relatedId:'scip-instructor-correction-v38'});
         this.seedInstructors(); this.applyInstructorRoster(); this.seedDefaultReportTemplates(); this.seedLocations(); this._scheduleStaffIndexWarm(); this._schedulePerfWarm(); this._scheduleOperationalPersist();
+        // Pick up anything another tab saved while this one was loading.
+        { const p=(this.__docsPersistChain||Promise.resolve()).catch(()=>{}).then(()=>this._docsSyncRun()); this.__docsPersistChain=p.then(()=>true,()=>false); }
         if(this.__pendingLoginAttempt&&!this.state.currentUser&&this.state.authStep==='login'){this.__pendingLoginAttempt=false;setTimeout(()=>this.doLogin(),0);}
       }); return;
     }
