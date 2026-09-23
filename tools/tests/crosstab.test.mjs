@@ -98,6 +98,43 @@ for (let i = 0; i < LOOPS; i++) {
   const C = await open('C'); const c = await q(C); await C.close(); const a = await q(A), b = await q(B);
   check('XT-6', 'staff archived in A and another archived in B: both stay archived everywhere', [...c, ...a, ...b].every(Boolean), { c, a, b }); }
 
+// R3-01: B saves two completions while A's staff import is awaiting its saves; the import must not
+// delete B's first completion when it commits (review3 e10b).
+for (const [n, [startGap, gap]] of [[0, 100], [50, 150], [150, 250], [0, 50], [100, 200], [0, 250]].slice(0, Math.max(3, LOOPS)).entries()) {
+  const id = String(99992000 + n), file = 'xt_r301_' + n + '.csv';
+  const pImp = importStaff(A, { id, file }); await sleep(startGap);
+  const ids = [];
+  for (let k = 0; k < 2; k++) { ids.push(await ev(B, ({ sid, tag }) => { const L = window.__hascLogic, d = L.state.docs; const cid = tag + '-' + Date.now(); L.saveDocs({ ...d, completions: [...d.completions, { id: cid, staffId: sid, code: 'CPR', complianceCode: 'CPR', date: '9/8/2026', source: 'Manual Admin Entry' }] }); return cid; }, { sid: staff[5 + k].id, tag: 'xt-r301-' + n + '-' + k })); await sleep(gap); }
+  await pImp; await sleep(SETTLE);
+  const q = p => ev(p, ([ids, id]) => { const L = window.__hascLogic, c = L.state.docs.completions; return { comps: ids.map(x => c.some(y => y.id === x)), staff: !!L.staffById(id) }; }, [ids, id]);
+  const C = await open('C'); const c = await q(C); await C.close(); const a = await q(A), b = await q(B);
+  const ok = [c, a, b].every(r => r && r.staff && r.comps.every(Boolean));
+  check('XT-7.' + n, 'B saves two completions during A\'s staff import (start ' + startGap + ' ms, gap ' + gap + ' ms): both completions and the new staff survive everywhere', ok, { c, a, b }); }
+
+// R3-02: a backup restore (and its undo) after a cross-tab merge must not duplicate audit entries.
+{ const dups = p => ev(p, () => { const m = new Map(); (window.__hascLogic.state.auditLog || []).forEach(e => { const k = JSON.stringify(e); m.set(k, (m.get(k) || 0) + 1); }); return [...m.values()].filter(v => v > 1).length; });
+  // simultaneous changes in both tabs make each tab's next save a real merge
+  for (let k = 0; k < 6; k++) { await Promise.all([audit(A, 'r302-a' + k), audit(B, 'r302-b' + k)]); await sleep(SETTLE); if (await ev(B, () => !!window.__hascLogic._opsAlt)) break; }
+  const before = await dups(B);
+  const res = await ev(B, async () => { const L = window.__hascLogic; const plan = L.backupRestorePlan(JSON.parse(JSON.stringify(L.backupPayload()))); if (plan.error) return plan.error; return L.applyBackupRestore(plan, 'xt'); });
+  await sleep(SETTLE); const C = await open('C'); const afterC = await dups(C); await C.close(); const afterA = await dups(A);
+  await ev(B, () => window.__hascLogic.undoLastRestore()); await sleep(SETTLE);
+  const C2 = await open('C'); const undoC = await dups(C2); await C2.close();
+  check('XT-8', 'backup restore and undo-restore after a cross-tab merge add no duplicate audit entries', res === true && afterC === before && afterA === before && undoC === before, { before, res, afterC, afterA, undoC }); }
+
+// R3-03: the pagehide flush fired while this tab's previous debounced save is still committing must
+// commit in its own transaction (a retry would not run while the page unloads).
+{ const P = await ctx.newPage(); P.on('dialog', d => d.accept());
+  await P.addInitScript(() => { window.__txlog = []; const o = IDBObjectStore.prototype.put; IDBObjectStore.prototype.put = function (v, k) { if (k === 'operational') { const tx = this.transaction; if (!tx.__t) { tx.__t = 1; tx.addEventListener('complete', () => window.__txlog.push('complete')); tx.addEventListener('abort', () => window.__txlog.push('abort')); } } const r = o.call(this, v, k); if (k === 'operational' && window.__onPut) { const f = window.__onPut; window.__onPut = null; f(); } return r; }; });
+  await P.goto('file://' + FILE); await P.waitForFunction(() => window.__hascLogic && window.__hascLogic._dataReady, null, { timeout: 120000 }); await P.evaluate(() => { const L = window.__hascLogic; L.signIn('admin', L.ACCOUNTS.admin[0]); }); await sleep(1500);
+  const runs = [];
+  for (let n = 0; n < 4; n++) runs.push(await ev(P, async (n) => { const L = window.__hascLogic; window.__txlog = []; L.logAudit('XT inflight 1', { target: 'xt-if1-' + n });
+    await new Promise(res => { window.__onPut = () => queueMicrotask(() => { L.logAudit('XT inflight 2', { target: 'xt-if2-' + n }); setTimeout(() => { L._flushPendingPersist(); res(); }, 0); }); L._flushPendingPersist(); });
+    await new Promise(r => setTimeout(r, 1500)); const s = await L._opsGet('operational'); const has = t => (s.auditLog || []).some(e => e.target === t);
+    return { tx: window.__txlog.slice(), stored: [has('xt-if1-' + n), has('xt-if2-' + n)] }; }, n));
+  await P.close();
+  check('XT-9', 'the unload flush during an in-flight save commits first time (no abort + retry) and both changes are stored', runs.every(r => r && r.tx && !r.tx.includes('abort') && r.stored.every(Boolean)), runs); }
+
 // ADM-06 still holds with two tabs open: a change made shortly before a reload is flushed on pagehide.
 for (const [n, d] of [40, 80, 150].entries()) {
   const pre = await ev(A, (t) => { const L = window.__hascLogic; L.logAudit('Crosstab flush', { target: t }); return { rev: L._opsRev, extra: !!L.__opsExtra, alt: !!L._opsAlt, hyd: L._hydratingOps }; }, 'xt-flush-' + n); await sleep(d);
