@@ -12803,8 +12803,10 @@ class Component extends DCLogic {
   // row marks this tab's own changes; anything this tab did not change is taken from the stored copy.
   // alts = every other value this tab has held since its last clean write (its values before each
   // merge it adopted, the base before a direct write). Async flows can still hold one of them, so a
-  // value equal to ANY of them is not a local change, and a row counts as deleted here only if base
-  // and every alt had it: a stale copy lacking rows that arrived later can never delete them.
+  // value equal to ANY of them is not a local change. A row counts as deleted here when base (what
+  // this tab last loaded, wrote or adopted) had it and this tab no longer does, so a row that arrived
+  // from another tab can still be deleted here (RR-01). Stale copies cannot delete rows because the
+  // async flows (applyImport, undoLastStaffImport) re-apply their changes onto current state at commit.
   _xtRev(){ return Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,10); }
   _xtPlain(o){ return !!o&&typeof o==='object'&&!Array.isArray(o); }
   _xtAlts(list,v){ const out=(list||[]).filter(x=>x&&x!==v); if(v)out.push(v); return out.length?out.slice(-12):null; }
@@ -12820,7 +12822,7 @@ class Component extends DCLogic {
   _xtMergeRows(b,alts,l,r,kf,log,cap){
     const bk=this._xtKeyed(b,kf),lk=this._xtKeyed(l,kf),rk=this._xtKeyed(r,kf); if(!bk||!lk||!rk)return null;
     const ams=[]; for(const a of alts||[]){ if(!Array.isArray(a))continue; const ak=this._xtKeyed(a,kf); if(!ak)return null; ams.push(new Map(ak)); }
-    const bm=new Map(bk),lm=new Map(lk),same=(k,x)=>bm.get(k)===x||ams.some(m=>m.get(k)===x),known=k=>bm.has(k)||ams.some(m=>m.has(k)),delLocal=k=>bm.has(k)&&ams.every(m=>m.has(k));
+    const bm=new Map(bk),lm=new Map(lk),same=(k,x)=>bm.get(k)===x||ams.some(m=>m.get(k)===x),known=k=>bm.has(k)||ams.some(m=>m.has(k)),delLocal=k=>bm.has(k);
     const out=[],add=[],seen=new Set(); let fromLocal=false;
     for(const [k,x] of rk){ seen.add(k); const lx=lm.get(k); if(lx===undefined){ if(delLocal(k)){fromLocal=true;continue;} out.push(x); continue; } if(lx===x||same(k,lx)){out.push(x);continue;} out.push(lx); fromLocal=true; }
     for(const [k,x] of lk){ if(seen.has(k)||known(k))continue; add.push(x); fromLocal=true; }
@@ -12828,13 +12830,13 @@ class Component extends DCLogic {
     return {v,fromLocal,fromRemote:!this._xtSameList(v,l)}; }
   // Arrays of primitives (archived ids): remote + added locally - removed locally.
   _xtMergeSet(b,alts,l,r){ const S=a=>new Set((a||[]).map(String)),bs=S(b),as=(alts||[]).filter(Array.isArray).map(S),ls=S(l),seen=new Set(),out=[]; let fromLocal=false;
-    for(const x of r||[]){ const k=String(x); if(seen.has(k))continue; seen.add(k); if(!ls.has(k)&&bs.has(k)&&as.every(s=>s.has(k))){fromLocal=true;continue;} out.push(x); }
+    for(const x of r||[]){ const k=String(x); if(seen.has(k))continue; seen.add(k); if(!ls.has(k)&&bs.has(k)){fromLocal=true;continue;} out.push(x); }
     for(const x of l||[]){ const k=String(x); if(seen.has(k)||bs.has(k)||as.some(s=>s.has(k)))continue; seen.add(k); out.push(x); fromLocal=true; }
     const os=S(out); return {v:out,fromLocal,fromRemote:os.size!==ls.size||[...ls].some(k=>!os.has(k))}; }
   // Settings maps: per-key overlay of the keys this tab changed or removed.
   _xtMergeObj(b,alts,l,r){ const out={...r},as=(alts||[]).filter(a=>this._xtPlain(a)); let fromLocal=false;
     for(const k of Object.keys(l)){ const lv=l[k]; if(lv===b[k]||as.some(a=>lv===a[k])||lv===r[k])continue; out[k]=lv; fromLocal=true; }
-    for(const k of Object.keys(b)){ if(!(k in l)&&as.every(a=>k in a)&&(k in out)){ delete out[k]; fromLocal=true; } }
+    for(const k of Object.keys(b)){ if(!(k in l)&&(k in out)){ delete out[k]; fromLocal=true; } }
     const ok=Object.keys(out); return {v:out,fromLocal,fromRemote:ok.length!==Object.keys(l).length||ok.some(k=>out[k]!==l[k])}; }
   _xtMergeValue(b,alts,l,r,spec){
     if(l===undefined)return {v:r,fromLocal:false,fromRemote:r!==undefined};

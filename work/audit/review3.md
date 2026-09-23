@@ -163,3 +163,69 @@ Everything else I tried held up:
 - Real back/forward-cache restore (simulated here by muting the handler).
 - Browser shutdown with 3 or more tabs flushing at once.
 - `sharedStore`, `lastStaffImportUndo` and `preRestoreBackup` are still plain last-writer-wins puts, so video assignments are not covered by IMP-08. Not a regression.
+
+---
+
+# Re-review: fixes in 30b2a02 (lead head 204b670), build `work/out_review4.html`
+
+`out_review4.html` is byte-identical to a rebuild of `template.html` at 204b670. I ran the scripts from `tools/` against it (`node ../work/scratch/review3/<script> /home/user/HASC-LMS/work/out_review4.html …`). The suite includes XT-7, XT-8 and XT-9 from 204b670 (saved as `scratch/review3/crosstab4.test.mjs`).
+
+## Verdict
+
+**One data-loss/corruption regression against the original baseline `out.html` remains: RR-01 below (High).** It was also present in the review3 build, but I missed it last time. R3-01 through R3-05 are fixed. R3-06 did not reproduce.
+
+## RR-01: A tab cannot delete a row it received from another tab. The row comes back; a cancelled session ends up both active and cancelled. High, VERIFIED-RUNTIME, REGRESSION vs baseline
+
+- **Where:**
+  - `_xtMergeRows`: `delLocal=k=>bm.has(k)&&ams.every(m=>m.has(k))` (template.html ~12823); the same rule appears in `_xtMergeSet` and `_xtMergeObj`.
+  - Where the alternates come from: `_docsAdopt` (~8734), `_opsAdopt` (~12896) and `_opsSyncFromStore` (~12924). All three call `_xtAlts(alts, local)`, and the last one does so even on a clean take-in.
+- **What happens:**
+  1. When tab A takes in tab B's save, A's previous value is added to its alternates. That value lacks B's new row X.
+  2. A then genuinely deletes X.
+  3. X is in base but not in *every* alternate, so the merge does not count it as a local deletion. X is kept, the result counts as "from remote", and A's state takes X back.
+  4. Alternates are only cleared by a write that is not from remote. Deleting X again therefore fails every time until A makes some *unrelated* change first. The docs alternates stayed set indefinitely in the test; the ops alternates cleared after an unrelated audit entry.
+- **Evidence** (`e16.mjs`, `e16b.mjs`). B creates a report template, archives staff member S, adds session `e16-sess` and adds location `e16-loc`. A receives these, then deletes the template, un-archives S, cancels the session (moving it to `cancelledSessions`) and deletes the location. Fresh tab C:
+
+  | Build | tmplGone | unarchived | sessGone | cancelled | locGone |
+  |---|---|---|---|---|---|
+  | review4 (4 runs, waits 2.5 s and 5 s) | **false** | **false** | **false** | true | **false** |
+  | review4, A deletes 3 times | false | false | false | true | false |
+  | review4, unrelated change by A first | **false** | **false** | true | true | true |
+  | review3 build | false | false | false | true | false |
+  | baseline `out.html` | true | true | true | true | true |
+
+  - The deleted template reappears.
+  - The un-archive is undone, so S is archived again.
+  - **The cancelled session is both active and in `cancelledSessions`.**
+  - A single tab is not affected (`e17.mjs`): after an import, alternates cleared on the next save, and a later delete survived reload.
+- **Fix:** stop inferring deletions from the accumulated alternates in the ordinary save path.
+  - For the flows that hold a stale snapshot (`applyImport`, `undoLastStaffImport`), the R3-01 fix now re-bases at commit time (`_docsMerge(oldDocs,null,docsImp,current)` / `_xtMergeRecord(...,opsAt,null,opsNext,state)`). The engine no longer needs to guess.
+  - Concretely: `delLocal=k=>bm.has(k)`; `known` and `same` may still use the alternates.
+  - Alternatively, if alternates are kept, limit them to the specific value an in-flight async flow captured: register and unregister it explicitly for the duration of `applyImport`/undo, instead of adding every take-in.
+  - Also stop `_opsSyncFromStore` (the not-dirty path) from adding to the alternates.
+- **How to test:** `e16.mjs` should give all `true` in A, B and C. XT-7 (`e10b`) must still pass.
+
+## Re-run of the review3 scripts on review4
+
+| Check | Result |
+|---|---|
+| R3-01 `e10b` (9 timing combinations) and `e10` with a 3 s delay and 1/2/3 take-ins | **Fixed.** All completions present in a fresh tab in every run. |
+| R3-02 `e1` restore and undo-restore after a merge | **Fixed.** `dupKeys` 0 throughout (13 → 14 → 15). |
+| R3-03 `e3c` in-flight flush; `e3` reload with 8 trials | **Fixed.** No ABORT; the flush builds on the in-flight rev and commits synchronously. 0/8 lost. |
+| R3-04 `e8`, 60 missed writes | **Fixed** for fewer than 500 writes: 60/60 kept, and markers stay bounded (ops 65, docs 62). I did not test real back/forward-cache restore (`pageshow`). |
+| R3-05 | Fixed (code reading): runs on the docs queue, and the lineage is consumed and extended. |
+| R3-06 | Instrumented `crosstab` 5/5 at 31/31, plain `crosstab` 3/3 at 31/31. One XT-2.2 failure happened in the full-suite pass while I was running other browser tests at the same time; it did not reproduce in 8 later runs. |
+| Suites | All 12 pass, apart from the XT-2.2 failure noted above. |
+| Single-tab save paths `e14` | Identical to pre and baseline: rollback, import and undo, completion, void, session, location, rule, audit, restore and undo all survive reload. |
+| Upgrade `e7` (baseline data opened in review4, and old and new tabs together) | Nothing lost. |
+| Ping storm `e15` | Drained in 234 ms; the pending change persisted. |
+
+## New parts attacked specifically
+
+- **Accumulated-alternates deletion inference:** broken; see RR-01. Staff-import rebase (`e10b`/`e10`) and single-tab deletion (`e17`) are fine.
+- **Audit ids and legacy content keys** (`e19.mjs`): three id-less entries with identical content (differing only in `sev`), plus one new id entry in each of two tabs, merged to all 5, newest first. An unchanged clone of the legacy list merged to 3, so there are no duplicates. Because of the occurrence suffix, identical content keys cannot collapse genuinely different entries. A collision can only re-pair entries that look the same apart from `sev`, `portal` or the actor fields, which the key leaves out. Low risk; no loss.
+- **Restore-as-replace racing another tab's pending or in-flight write** (`e18.mjs`, with the other tab's change made 0, 300 and 900 ms before the restore):
+  - The restore is applied exactly: a template deleted after the backup comes back, and one added after it is gone.
+  - There are no duplicates, and all three tabs converge.
+  - The other tab's concurrent template, audit entry and session note are discarded. This matches the baseline, where a restore replaces everything, so it is not a regression. It is worth noting in the restore confirmation text for multi-tab use.
+- **Take-in without `_hydratingOps`** (`e18.mjs` burst): both tabs made changes every 150–170 ms for 6 s. In the following 10 s of idle there were **0 pings and 0 writes** in either tab. A, B and a fresh tab agree on the counts (40/18). One ping per change afterwards (`e1`). No write storm or ping loop.

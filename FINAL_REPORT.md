@@ -4,7 +4,7 @@
 **Delivered build:** `HASC_LMS_v5_ATTENDANCE_DESCRIPTIONS_2026-09-22_audited.html`
 **Branch:** `claude/hasc-lms-readiness-audit-eh04y4` · **Date:** 2026-09-22/23
 **Issue ledger:** `work/ISSUE_LEDGER.md` (every finding, owner, status, fix, verification)
-**Evidence:** `work/audit/*.md` (10 audit reports + 3 independent reviews + QA regression sweep)
+**Evidence:** `work/audit/*.md` (10 audit reports, independent reviews review1–3 with a re-review, and a QA regression sweep)
 
 ---
 
@@ -12,7 +12,7 @@
 
 Ten specialist agents audited the running application, driving it headlessly at full data scale (4,053 staff, ~24,650 completion records, 77 sessions): compliance rules, the Staff, Manager and Admin portals, data import, scheduling/calendar/registration, certificates and records, permissions and security, QA/regression, and UX. Each finding was traced from input to stored state to UI output, and reproduced at runtime where possible. The app's own clock was used (there is no demo clock), with New York time zone for date bugs.
 
-**Result:** 138 findings (11 Critical, 45 High, 53 Medium, 29 Low). Three independent reviews and a second QA sweep added 23 more follow-ups, all Medium or lower.
+**Result:** 138 findings (11 Critical, 45 High, 53 Medium, 29 Low). Four independent adversarial reviews and a second QA sweep added more follow-ups. Most were Medium or lower; two were in the new persistence code itself (one Critical, caught before release).
 
 ## 2. Major problems discovered
 
@@ -67,8 +67,8 @@ Every fix is targeted. No feature was removed, and data saved by the original bu
 
 ## 5. Tests performed
 
-- **12 regression suites** (`tools/tests/*.test.mjs`, ~170 assertions). Each check reproduces a finding end to end through the app's own functions or UI, including after a page reload. Every suite was run against the original build (where its finding checks fail) and against the fixed build (where all pass). Run: `cd tools && npm i playwright@1.56.1 && for f in tests/*.test.mjs; do node $f <build.html>; done`.
-- **Builder/reviewer pattern:** six builders worked in isolated worktrees. Three independent adversarial reviews (`review1..3.md`) found 23 follow-ups, all fixed and added to the suites.
+- **13 regression suites** (`tools/tests/*.test.mjs`, 180 assertions). Each check reproduces a finding end to end through the app's own functions or UI, including after a page reload. Every suite was run against the original build (where its finding checks fail) and against the fixed build (where all pass). Run: `cd tools && npm i playwright@1.56.1 && for f in tests/*.test.mjs; do node $f <build.html>; done`.
+- **Builder/reviewer pattern:** six builders worked in isolated worktrees. Independent adversarial reviews (`review1.md`, `review2.md`, `review3.md` including a re-review) found follow-ups, all fixed and added to the suites. The persistence change (IMP-08) went through three review rounds: the first found a data-loss regression (an import could delete another tab's completions), the re-review found that cross-tab deletes weren't honoured. Both are fixed. The re-review found no other data-loss or corruption regression against the original; the RR-01 fix was verified with the reviewer's own reproduction scripts, alongside the R3-01 scenario at six timings (`review3.test.mjs`).
 - **QA regression sweep 2:** 58 tabs × 4 portals, ~1,100 buttons clicked, phone viewport, admin preview mode. **No functional regressions** versus the baseline; in-app QA Checks 22/22.
 - **Upgrade compatibility:** state saved by the original build, opened in the new build, with nothing lost.
 
@@ -80,6 +80,7 @@ Every fix is targeted. No feature was removed, and data saved by the original bu
 | Medium | Several business rules are still code-level (role pathways, 2018 grandfather date, 30/90-day color thresholds) — CMP-13/ADM-12. The SCORM iframe is not sandboxed (SEC-07). One-time load scrubs delete history without an audit entry (CRT-13). There is no grace period after a transfer or role change (CMP-12, a policy decision). |
 | Medium (UX) | Inconsistent status wording, unexplained course abbreviations, toasts for errors, sign-in instructions, overlapping tab names (UX-06/07/08/10/13/14/16). |
 | Low | 14 items (see ledger), including 741 duplicated seed completions and some no-op controls. |
+| Low (persistence) | A save issued in the last milliseconds before a reload can be cut off by the browser (the original build loses these too). Real back/forward-cache restore and a tab that missed 500+ saves were not tested. Tabs still running an older build don't take part in the merge. |
 | Ops | All seeded sessions are in the past, so registration can't be exercised until the real upcoming calendar is loaded. |
 
 ## 7. Recommended next priorities

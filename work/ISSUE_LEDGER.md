@@ -3,7 +3,7 @@
 Baseline: `HASC_LMS_v5_ATTENDANCE_DESCRIPTIONS_2026-09-22.html`. Regenerate with `python3 tools/ledger.py`.
 Full evidence, root cause, fix and test plan for each ID: `work/audit/<area>.md`.
 
-**142 findings** — Critical: 11, High: 47, Medium: 54, Low: 30
+**143 findings** — Critical: 12, High: 47, Medium: 54, Low: 30
 
 | ID | Description | Sev | Owner | Status | Fix implemented | Verification |
 |---|---|---|---|---|---|---|
@@ -38,7 +38,7 @@ Full evidence, root cause, fix and test plan for each ID: `work/audit/<area>.md`
 | IMP-05 | A partial active-only Intelex file can archive nearly the whole roster; coverage check bypassed | High | W4 admin/import | Fixed (verified) | 70% coverage + typed confirm; supervisors/emails kept; scoped undo; leading-zero IDs; 1904 dates; Needs-review codes; batch undo; re-check dupes | admin_import.test |
 | IMP-06 | Staff import replaces valid supervisors with location "placeholder" supervisors | High | W4 admin/import | Fixed (verified) | 70% coverage + typed confirm; supervisors/emails kept; scoped undo; leading-zero IDs; 1904 dates; Needs-review codes; batch undo; re-check dupes | admin_import.test |
 | IMP-07 | Undoing the last staff import silently discards every later change | High | W4 admin/import | Fixed (verified) | 70% coverage + typed confirm; supervisors/emails kept; scoped undo; leading-zero IDs; 1904 dates; Needs-review codes; batch undo; re-check dupes | admin_import.test |
-| IMP-08 | Cross-tab last-writer-wins can silently drop an applied import and audit entries | High | W6 persistence | In progress | Three-way merge on write/hydrate for ops + docs |  |
+| IMP-08 | Cross-tab last-writer-wins can silently drop an applied import and audit entries | High | W6 persistence | Fixed (verified) | Three-way merge inside one IndexedDB transaction for operational state and docs; revision markers; import/undo re-apply at commit; audit ids; restore = replace; re-sync on pageshow/visible | crosstab.test 25/31 → 31/31 (5/5 runs); review3.test 4/4; independent re-review: no data-loss regression vs baseline after RR-01 fix |
 | IMP-09 | Excel-mangled leading-zero IDs create duplicate staff | High | W4 admin/import | Fixed (verified) | 70% coverage + typed confirm; supervisors/emails kept; scoped undo; leading-zero IDs; 1904 dates; Needs-review codes; batch undo; re-check dupes | admin_import.test |
 | MGR-02 | Managers see staff far outside their assigned locations, and three different scope rules disagree | High | W3 security | Fixed (verified) — policy: locations + reporting chain | HASCPolicy uses the app scope resolver; header states the rule | security.test (policy 1075 = app 1075) |
 | MGR-03 | Location Directory manager assignments have no effect on access, and a rename silently drops staff | High | W3 security | Fixed (verified) | Directory drives scope + rename alias; print-all exact set; ambiguous email refused; Deny hidden; scope fixes; cert view guard | security.test |
@@ -147,5 +147,6 @@ Full evidence, root cause, fix and test plan for each ID: `work/audit/<area>.md`
 | UX-18 | Location lists differ between screens and include junk entries | Low | — | Open |  |  |
 | R2-01..09 | Combined-build review (work/audit/review2.md): legacy restore credit, import-undo voids, void-aware ART anchor, scheduled-rule cancel, instructor rename access, cert id check, manager filter, diagnostic, reinstatement guard | High | Lead | Fixed (verified) | Commits 18ff44d, fe059b5 | review2.test 0/9 → 9/9 |
 | QA2-01..05 | QA regression sweep 2 (work/audit/qa2.md): no functional regressions; follow-ups | Low | Lead | Fixed (verified) — 01, 04, 05; 02 (22 of 56 in-app checks) and 03 (report print freeze, pre-existing) open | Commit 0c9bbc4 | runtime checks + all suites |
+| R3-01..06, RR-01 | Independent reviews of the IMP-08 persistence change (work/audit/review3.md): import could delete another tab’s completions; audit-log duplication on restore; unload flush abort; stale-tab overwrite; cross-tab deletes not honoured | Critical | W6 + Lead | Fixed (verified) | Commits 30b2a02 (W6) and the RR-01 deletion-inference fix (lead) | crosstab.test 31/31; review3.test 4/4 (RR-01 fails on the pre-fix build 2/2) |
 | PV-01 | Admin preview of the Staff portal could write to the real employee record (user request) | High | Lead | Fixed (verified) | staffPreviewReadOnly guard on all entry points and final writers; banner says read-only | preview.test 3/7 → 7/7 |
 | R1-01..14 | Independent review of batch 1 (work/audit/review1.md) | Medium | Lead | Fixed (verified) — 01,02,04,06,07,08,09,11; 10/05 via W2; 03 via W4 ADM-02; 12,13,14 Low deferred | See commit 9cff283 | review1.test |

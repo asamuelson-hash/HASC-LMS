@@ -44,7 +44,7 @@ st('UX-03 UX-04 MGR-06 MGR-07 MGR-11', W5, FV, 'Manager Out-of-compliance card; 
 st('QA-02 ADM-13 QA-03 QA-04 QA-05 QA-08', W5, FV, 'In-app QA suite restored (22 checks); void modal session; KPI caption; archived Set; duplicate key', 'surfaces.test')
 st('IMP-04', L1, FV, 'Expiry years >= 2051 import as No expiration; computed expiries not overrides', 'review1.test IMP-04')
 st('UX-11', 'Lead', FV, 'Phone: wrapping tabs, compact header, instructor cards with Pass/Fail, transcript fits', 'phone.test 2/5 → 5/5')
-st('IMP-08', 'W6 persistence', 'In progress', 'Three-way merge on write/hydrate for ops + docs', '')
+st('IMP-08', 'W6 persistence', 'Fixed (verified)', 'Three-way merge inside one IndexedDB transaction for operational state and docs; revision markers; import/undo re-apply at commit; audit ids; restore = replace; re-sync on pageshow/visible', 'crosstab.test 25/31 → 31/31 (5/5 runs); review3.test 4/4; independent re-review: no data-loss regression vs baseline after RR-01 fix')
 st('SEC-04 STF-04 SEC-06 SEC-10 CMP-15', 'Architecture', "Deferred — needs server auth", 'Inherent to browser-only prototype; requires Supabase Auth/RLS (SUPABASE_MIGRATION.md)', '')
 st('QA-06', 'Ops/data', 'Deferred — data', 'All seeded sessions are past; load the real upcoming calendar', '')
 
@@ -70,6 +70,7 @@ order = {'Critical': 0, 'High': 1, 'Medium': 2, 'Low': 3, '?': 4}
 rows.sort(key=lambda r: (order[r[2]], r[0]))
 rows.append(('R2-01..09','Combined-build review (work/audit/review2.md): legacy restore credit, import-undo voids, void-aware ART anchor, scheduled-rule cancel, instructor rename access, cert id check, manager filter, diagnostic, reinstatement guard','High','Lead','Fixed (verified)','Commits 18ff44d, fe059b5','review2.test 0/9 → 9/9'))
 rows.append(('QA2-01..05','QA regression sweep 2 (work/audit/qa2.md): no functional regressions; follow-ups','Low','Lead','Fixed (verified) — 01, 04, 05; 02 (22 of 56 in-app checks) and 03 (report print freeze, pre-existing) open','Commit 0c9bbc4','runtime checks + all suites'))
+rows.append(('R3-01..06, RR-01','Independent reviews of the IMP-08 persistence change (work/audit/review3.md): import could delete another tab’s completions; audit-log duplication on restore; unload flush abort; stale-tab overwrite; cross-tab deletes not honoured','Critical','W6 + Lead','Fixed (verified)','Commits 30b2a02 (W6) and the RR-01 deletion-inference fix (lead)','crosstab.test 31/31; review3.test 4/4 (RR-01 fails on the pre-fix build 2/2)'))
 rows.append(('PV-01','Admin preview of the Staff portal could write to the real employee record (user request)','High','Lead','Fixed (verified)','staffPreviewReadOnly guard on all entry points and final writers; banner says read-only','preview.test 3/7 → 7/7'))
 rows.append(('R1-01..14','Independent review of batch 1 (work/audit/review1.md)','Medium','Lead','Fixed (verified) — 01,02,04,06,07,08,09,11; 10/05 via W2; 03 via W4 ADM-02; 12,13,14 Low deferred','See commit 9cff283','review1.test'))
 c = collections.Counter(r[2] for r in rows); cs = collections.Counter((r[2], r[4].split(' ')[0]) for r in rows)
