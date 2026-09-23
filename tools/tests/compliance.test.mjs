@@ -17,7 +17,7 @@ const flush = () => wait(1500);
 // ---- pick fixtures from live data ----
 const fx = await ev(() => { const L = window.__hascLogic; const act = L._activeRosterMemo();
   const greenCPR = act.find(s => L.requiredFor(s, 'CPR') && L.effStatus(s, 'CPR') === 'g' && s.dt.CPR && L.compDateVal(s.dt.CPR) > new Date(2026,0,1).getTime());
-  const redCPR = act.filter(s => L.requiredFor(s, 'CPR') && L.effStatus(s, 'CPR') === 'r' && s.dt.CPR);
+  const redCPR = act.filter(s => L.requiredFor(s, 'CPR') && L.effStatus(s, 'CPR') === 'r' && s.dt.CPR && L.compDateVal(s.dt.CPR) < new Date(2024, 8, 5).getTime());
   const redFA = act.find(s => L.requiredFor(s, 'FA') && L.effStatus(s, 'FA') === 'r' && s.id !== redCPR[0].id);
   const comps = L.state.docs.completions || [];
   const backed = new Set(comps.map(c => L.completionStaffId(c) + '|' + L.completionComplianceCode(c) + '|' + L.completionDate(c)));
