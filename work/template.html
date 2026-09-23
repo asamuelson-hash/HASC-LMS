@@ -8671,7 +8671,7 @@ class Component extends DCLogic {
   _mergeCompletionDelta(seed,delta){ seed=Array.isArray(seed)?seed:[];delta=(delta&&typeof delta==='object')?delta:{};const removed=new Set(Array.isArray(delta.removedSeedKeys)?delta.removedSeedKeys:[]),up=Array.isArray(delta.upserts)?delta.upserts:[],um=new Map(up.map(c=>[this._completionStorageKey(c),c])),seedKeys=new Set();const out=[];seed.forEach(c=>{const k=this._completionStorageKey(c);seedKeys.add(k);if(removed.has(k))return;out.push(um.has(k)?um.get(k):c);});up.forEach(c=>{const k=this._completionStorageKey(c);if(!seedKeys.has(k))out.push(c);});return out; }
   _docsUndoSnapshot(docs){ docs=this._normalizeDocs(docs); const fields={};this._docsPersistFields().forEach(f=>fields[f]=docs[f]);return {v:5,fields,meta:this._docsMetaSnapshot(docs),completionDelta:this._completionDeltaFromDocs(docs.completions,this._seedCompletions())}; }
   _docsFromUndoSnapshot(snap){ if(!snap||snap.v!==5)return null;const base=this._docsDefaults(),fields=snap.fields||{},meta=snap.meta||{};const docs={...base,...meta};this._docsPersistFields().forEach(f=>{if(Object.prototype.hasOwnProperty.call(fields,f))docs[f]=fields[f];});docs.completions=this._mergeCompletionDelta(this._seedCompletions(),snap.completionDelta||{});return this._normalizeDocs(docs); }
-  async _persistAllDocsV5(docs,ping=true){ docs=this._normalizeDocs(docs);const seed=this._seedCompletions(),entries=[[this._docsDeltaKey(),this._completionDeltaFromDocs(docs.completions,seed)],[this._docsMetaKey(),this._docsMetaSnapshot(docs)],[this._docsVersionKey(),5]];this._docsPersistFields().forEach(f=>entries.push([this._docsStoreKey(f),docs[f]]));const rev=this._xtRev();entries.push([this._docsRevKey(),rev],[this._docsLineageKey(),[]]);if(this._docsRev!=null)entries.push(['docs_child_of_'+this._docsRev,1]);await this._opsPutMany(entries);this.__docsLineage=[];this.__docsLoadedRev=rev;if(this._docsBase)this._docsRev=null;try{await this._opsDelete(this._docsSeedKey());}catch(_e){}try{await this._opsPut('docs',null);}catch(_e){}try{localStorage.removeItem('hasc_docs');}catch(_e){}if(ping)this._docsPing();return true; }
+  async _persistAllDocsV5(docs,ping=true){ docs=this._normalizeDocs(docs);const seed=this._seedCompletions(),entries=[[this._docsDeltaKey(),this._completionDeltaFromDocs(docs.completions,seed)],[this._docsMetaKey(),this._docsMetaSnapshot(docs)],[this._docsVersionKey(),5]];this._docsPersistFields().forEach(f=>entries.push([this._docsStoreKey(f),docs[f]]));const rev=this._xtRev(),RK=this._docsRevKey(),LK=this._docsLineageKey();entries.push([RK,rev]);let lineage=[];const db=await this._opsDB();await new Promise((res,rej)=>{const tx=db.transaction('kv','readwrite'),st=tx.objectStore('kv'),q=st.get(RK),ql=st.get(LK);entries.forEach(x=>st.put(x[1],x[0]));ql.onsuccess=()=>{const cur=q.result==null?null:q.result;if(cur!=null)st.put(Date.now(),'docs_child_of_'+cur);const lin=this._xtLineage(cur,ql.result);lineage=lin.keep;st.put(lin.keep,LK);lin.drop.forEach(r=>st.delete('docs_child_of_'+r));};tx.oncomplete=()=>res(true);tx.onerror=()=>rej(tx.error);tx.onabort=()=>rej(tx.error);});this.__docsLineage=lineage;this.__docsLoadedRev=rev;if(this._docsBase)this._docsRev=null;try{await this._opsDelete(this._docsSeedKey());}catch(_e){}try{await this._opsPut('docs',null);}catch(_e){}try{localStorage.removeItem('hasc_docs');}catch(_e){}if(ping)this._docsPing();return true; }
   async loadDocs(){
     try{
       const version=await this._opsGet(this._docsVersionKey());
@@ -8699,10 +8699,10 @@ class Component extends DCLogic {
   // transaction with no read and no callback needed, so a save issued on pagehide still commits
   // like a plain put. After such a conflict (or when this tab's rev is unknown) the save is redone
   // as read-merge-write in one transaction. The last 50 revs are kept so old markers can be removed.
-  _xtLineage(baseRev,prior){ const lin=[baseRev].concat(Array.isArray(prior)?prior:[]).filter(x=>x!=null); return {keep:lin.slice(0,50),drop:lin.slice(50)}; }
+  _xtLineage(baseRev,prior){ const lin=[baseRev].concat(Array.isArray(prior)?prior:[]).filter(x=>x!=null); return {keep:lin.slice(0,500),drop:lin.slice(500)}; }
   _docsLineageKey(){ return 'docs_v5_lineage'; }
-  _docsMergePut(local,prev){ return this._docsTryPut(local,prev,true).then(r=>r||this._docsTryPut(local,prev,false)); }
-  _docsTryPut(local,prev,tryOptimistic){ return this._opsDB().then(db=>new Promise((res,rej)=>{ const base=this._docsBase,alt=this._docsAlt,rev0=this._docsRev,F=this._docsPersistFields(),RK=this._docsRevKey(),LK=this._docsLineageKey();
+  _docsMergePut(local,prev,replace){ return this._docsTryPut(local,replace?null:prev,!replace,replace).then(r=>r||this._docsTryPut(local,replace?null:prev,false,replace)); }
+  _docsTryPut(local,prev,tryOptimistic,replace){ return this._opsDB().then(db=>new Promise((res,rej)=>{ const base=replace?null:this._docsBase,alt=this._docsAlt,rev0=this._docsRev,F=this._docsPersistFields(),RK=this._docsRevKey(),LK=this._docsLineageKey();
     const tx=db.transaction('kv','readwrite'),st=tx.objectStore('kv'); let out=null,conflict=false; const fail=e=>{ try{tx.abort();}catch(_e){} rej(e); };
     const plan=(merged,ref)=>{ const force=prev===null||!ref,entries=[];
       F.forEach(f=>{ if(force||merged[f]!==ref[f])entries.push([this._docsStoreKey(f),merged[f]]); });
@@ -8715,10 +8715,10 @@ class Component extends DCLogic {
     tx.oncomplete=()=>{ if(out)this.__docsLineage=out.lineage; res(out); }; tx.onerror=()=>{ if(!conflict)rej(tx.error); }; tx.onabort=()=>{ if(conflict)res(null); else rej(tx.error||new Error('IndexedDB write aborted')); };
     try{
       if(tryOptimistic&&base&&rev0!=null){ const m=alt?this._docsMerge(base,alt,local,base):{v:local,fromRemote:false},entries=plan(m.v,base);
-        if(entries.length){ const cas=st.add(1,'docs_child_of_'+rev0); cas.onerror=()=>{ conflict=true; }; commit(m,entries,rev0,this.__docsLineage); return; } }
+        if(entries.length){ const cas=st.add(Date.now(),'docs_child_of_'+rev0); cas.onerror=()=>{ conflict=true; }; commit(m,entries,rev0,this.__docsLineage); return; } }
       const q=st.get(RK),ql=st.get(LK);
       q.onsuccess=()=>{ try{ const cur=q.result==null?null:q.result;
-          ql.onsuccess=()=>{ try{ const prior=ql.result||[],mark=()=>{ if(cur!=null)st.put(1,'docs_child_of_'+cur); };
+          ql.onsuccess=()=>{ try{ const prior=ql.result||[],mark=()=>{ if(cur!=null)st.put(Date.now(),'docs_child_of_'+cur); };
               if(!base){ const e=plan(local,prev||null); if(e.length)mark(); commit({v:local},e,cur,prior); return; }
               if(rev0!=null&&cur===rev0){ const m=alt?this._docsMerge(base,alt,local,base):{v:local,fromRemote:false},e=plan(m.v,base); if(e.length)mark(); commit(m,e,cur,prior); return; }
               const keys=[this._docsDeltaKey(),this._docsMetaKey(),...F.map(f=>this._docsStoreKey(f))],vals={}; let left=keys.length;
@@ -8727,18 +8727,18 @@ class Component extends DCLogic {
         }catch(err){fail(err);} };
       q.onerror=()=>fail(q.error||tx.error); ql.onerror=()=>fail(ql.error||tx.error);
     }catch(err){ fail(err); } })); }
-  _afterDocsWrite(r,local,docsParam){ if(!r)return; this._docsRev=r.rev; if(!this._docsBase)return; if(r.fromRemote)this._docsAdopt(r.merged,local,docsParam); else { this._docsBase=local; this._docsAlt=null; } }
+  _afterDocsWrite(r,local,docsParam){ if(!r)return; this._docsRev=r.rev; if(!this._docsBase&&!this._dataReady)return; if(r.fromRemote)this._docsAdopt(r.merged,local,docsParam); else { this._docsBase=local; this._docsAlt=null; } }
   // Show the merged docs (and the roster replayed from them), keeping any later local change.
   _docsAdopt(merged,local,docsParam){ const cur=this.state.docs; let next=merged;
-    if(cur&&cur!==local&&cur!==docsParam){ next=this._docsMerge(local,null,cur,merged).v; this.__docsRebased={from:cur,to:next}; } else this.__docsRebased=null;
-    this._docsBase=merged; this._docsAlt=local;
+    if(cur&&cur!==local&&cur!==docsParam){ next=this._docsMerge(local,this._docsAlt,cur,merged).v; this.__docsRebased={from:cur,to:next}; } else this.__docsRebased=null;
+    this._docsBase=merged; this._docsAlt=this._xtAlts(this._docsAlt,local);
     const old=this.state.roster||[],roster=this.applyCompletionsToRoster(this.applyVoidsToRoster(old,next),next); this._opsRebaseRoster(old,roster);
-    this._hydratingOps=true; this.setState({docs:next,roster},()=>{ this._hydratingOps=false; this.__memo={}; }); }
+    this.setState({docs:next,roster},()=>{ this.__memo={}; }); }
   // Another tab saved docs: merge them in (writing back only if this tab has unsaved changes).
   async _docsSyncRun(){ if(!this._dataReady||!this._docsBase)return; const cur=this.state.docs; const r=await this._docsMergePut(cur,undefined); this._afterDocsWrite(r,cur,cur); if(r&&r.wrote)this._docsPing(); }
-  _persistDocsNow(docs,ping=true,prevDocs){
-    const snapshot=this._normalizeDocs(docs),prev=prevDocs===undefined?this.state.docs:prevDocs;
-    const run=async()=>{ const rb=this.__docsRebased; let local=snapshot; if(rb&&(rb.from===docs||rb.from===snapshot)&&this.state.docs===rb.to)local=rb.to; const r=await this._docsMergePut(local,prev); this._afterDocsWrite(r,local,docs); if(ping&&r&&r.wrote)this._docsPing(); this.__docsPersistWarned=false; return true; };
+  _persistDocsNow(docs,ping=true,prevDocs,opts){
+    const snapshot=this._normalizeDocs(docs),prev=prevDocs===undefined?this.state.docs:prevDocs,replace=!!(opts&&opts.replace);
+    const run=async()=>{ const rb=this.__docsRebased; let local=snapshot; if(!replace&&rb&&(rb.from===docs||rb.from===snapshot)&&this.state.docs===rb.to)local=rb.to; const r=await this._docsMergePut(local,prev,replace); if(replace&&r){ r.fromRemote=false; this._docsAlt=null; } this._afterDocsWrite(r,local,docs); if(ping&&r&&r.wrote)this._docsPing(); this.__docsPersistWarned=false; return true; };
     this.__docsPersistChain=(this.__docsPersistChain||Promise.resolve()).catch(()=>{}).then(run).catch(e=>{if(!this.__docsPersistWarned&&console&&console.warn){this.__docsPersistWarned=true;console.warn('[HASC LMS] Docs persistence failed; current-session data remains in memory.',e);}return false;});return this.__docsPersistChain;
   }
   // ===== Staff Change History (Admin review) — append-only, persisted in docs.staffChangeHistory =====
@@ -9525,7 +9525,7 @@ class Component extends DCLogic {
   }
   toggleCourseActive(id){ this.setState(s=>({onlineCourses:s.onlineCourses.map(c=>c.id===id?{...c,active:!c.active}:c)})); }
   // Append-only audit logger (prototype). In production this is a server-side INSERT into audit_logs (no client edit/delete).
-  auditEntry(action, o){ o=o||{}; const cu=this.state.currentUser; const d=new Date(); const ts=(d.getMonth()+1)+'/'+d.getDate()+'/'+String(d.getFullYear()).slice(2)+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); const hop=cu&&this.state.hopOrigin; const e={ts, user:hop?hop.name:((cu&&cu.name)||'System'), role:hop?'admin':((cu&&cu.role)||'system'), staff:o.staff||'—', target:o.target||'—', action, prev:o.prev||'', next:o.next||'', notes:o.notes||'', portal:(cu&&cu.role)?(cu.role.charAt(0).toUpperCase()+cu.role.slice(1)):'System', sev:o.sev||'Info', relatedId:o.relatedId||''};
+  auditEntry(action, o){ o=o||{}; const cu=this.state.currentUser; const d=new Date(); const ts=(d.getMonth()+1)+'/'+d.getDate()+'/'+String(d.getFullYear()).slice(2)+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); const hop=cu&&this.state.hopOrigin; const e={id:'aud'+d.getTime().toString(36)+Math.random().toString(36).slice(2,8), ts, user:hop?hop.name:((cu&&cu.name)||'System'), role:hop?'admin':((cu&&cu.role)||'system'), staff:o.staff||'—', target:o.target||'—', action, prev:o.prev||'', next:o.next||'', notes:o.notes||'', portal:(cu&&cu.role)?(cu.role.charAt(0).toUpperCase()+cu.role.slice(1)):'System', sev:o.sev||'Info', relatedId:o.relatedId||''};
     // While an admin is previewing another portal the actor is still the admin; the previewed account is noted.
     if(hop){ e.actingAs=cu.name+' ('+cu.role+')'; e.notes=(e.notes?e.notes+' · ':'')+'Admin '+hop.name+' viewing as '+e.actingAs; } return e; }
   logAudit(action, o){ const entry=this.auditEntry(action,o);
@@ -10638,12 +10638,12 @@ class Component extends DCLogic {
     const baseRoster=hasRoster?op.roster:this._retractRemovedCompletions(this.state.roster,this.state.docs||{},nd);
     next.roster=this.applyCompletionsToRoster(this.applyVoidsToRoster(baseRoster,nd),nd);
     if(plan.lib){ if(Array.isArray(plan.lib.customCourses)) next.customCourses=plan.lib.customCourses; if(Array.isArray(plan.lib.onlineCourses)) next.onlineCourses=[...plan.lib.onlineCourses.filter(c=>c&&!c.scorm),...(this.state.onlineCourses||[]).filter(c=>c&&c.scorm)]; }
-    const ok=await this.saveDocs(nd); if(ok===false){ this.setState({backupMsg:'Restore could not be saved to this browser’s storage; reload to return to the previous data.'}); }
+    const ok=await this.saveDocs(nd,{replace:true}); if(ok===false){ this.setState({backupMsg:'Restore could not be saved to this browser’s storage; reload to return to the previous data.'}); }
     this.setState(s=>Object.assign(next,{locReqVer:(s.locReqVer||0)+1, backupPreRestoreAt:pre.savedAt}));
     if(plan.profiles) this.commitLocReqProfiles(plan.profiles);
     if(plan.store){ try{ window.HASCStore&&window.HASCStore.replaceSnapshot&&window.HASCStore.replaceSnapshot(plan.store); }catch(err){} }
     this.logAudit('Backup restored',{target:label||'backup file', prev:'Previous data saved as pre-restore backup ('+pre.savedAt+')', next:(plan.kind==='legacy'?'Records-only export':'Full backup')+(plan.exportedAt?(' from '+plan.exportedAt):''), notes:plan.lines.join('; ')+(plan.kept.length?(' · Kept: '+plan.kept.join('; ')):''), sev:'Compliance'});
-    await new Promise(r=>setTimeout(r,0)); try{ if(this._opsPersistT){clearTimeout(this._opsPersistT);this._opsPersistT=null;} await this._persistOperationalState(); }catch(err){}
+    await new Promise(r=>setTimeout(r,0)); try{ if(this._opsPersistT){clearTimeout(this._opsPersistT);this._opsPersistT=null;} await this._persistOperationalState({replace:true}); }catch(err){}
     this.setState({backupMsg:'Restored '+(plan.kind==='legacy'?'records-only export':'full backup')+'. '+plan.lines.join(' · ')+(plan.kept.length?(' · Kept as-is: '+plan.kept.join('; ')):'')}); this.toast('Backup restored.'); return true; }
   async _loadPreRestoreBackup(){ try{ return await this._opsGet('preRestoreBackup'); }catch(e){ return null; } }
   async downloadPreRestoreBackup(){ const pre=await this._loadPreRestoreBackup(); if(!pre||!pre.payload){ this.toast('No pre-restore backup is stored.'); return; } this._downloadJson(pre.payload,'hasc-lms-pre-restore-'+String(pre.savedAt||'').slice(0,10)+'.json'); }
@@ -10651,7 +10651,7 @@ class Component extends DCLogic {
     if(typeof window!=='undefined'&&window.confirm&&!window.confirm('Return to the data as it was before the last restore (saved '+pre.savedAt+')?\n\n'+plan.lines.join('\n'))) return;
     const ok=await this.applyBackupRestore(plan,'pre-restore backup ('+pre.savedAt+')'); if(ok){ try{ await this._opsDelete('preRestoreBackup'); }catch(e){} this.__preRestoreChecked=true; this.setState({backupPreRestoreAt:'',backupMsg:'Returned to the data as it was before the last restore (saved '+pre.savedAt+'). '+plan.lines.join(' \u00b7 ')}); this.toast('Last restore undone.'); } }
   importCsvStaff(){ if(!this.can('import_staff')){ this.toast('Administrator access is required to import staff.'); return; } const lines=(this.state.csvText||'').trim().split('\n').filter(x=>x.trim()); const cols=['O1','O2','O3','EPP','ART','PA','CPR','FA','SCIP1','SCIP2','SCIPR','DYS','DIAB','DIABP','AMAP','AMAPP','CB','CBP','TF','TFP','DD','WCO','WCI','SDCH1','SDCH2','RNORI','RNPLAN','PONS']; const news=[]; const have=new Set(this.state.roster.map(r=>r.id)); lines.forEach(line=>{ const p=line.split(';').map(x=>x.trim()); if(p.length<2)return; const id=p[0],name=p[1]; if(!id||!name||have.has(id))return; have.add(id); const rec={}; cols.forEach(c=>rec[c]='w'); news.push({id,name,pos:p[2]||'',loc:p[3]||'',h:p[4]||'',mgrId:'',rec,dt:{}}); }); if(news.length){ let docs=this.state.docs; news.forEach(r=>{ docs=this.logStaffChange({staffId:r.id, name:r.name, pos:r.pos||'', loc:r.loc||'', h:r.h||'', mgrId:r.mgrId||'', action:'Created', source:'Manual action', notes:'Created by admin (pasted rows)'}, docs); }); this.saveDocs(docs); news.forEach(r=>this.logAudit('Staff added (manual)',{staff:r.name||r.id, next:'active', notes:'Pasted staff row', sev:'Info', relatedId:r.id})); this.setState(s=>({roster:[...s.roster,...news], csvText:'', recMsg:news.length+' staff added to the roster.'})); this.toast(news.length+' staff added.'); } else { this.setState({recMsg:'No new staff added \u2014 check the format or duplicate IDs.'}); } }
-  saveDocs(docs){ const prev=this.state.docs; docs=this._normalizeDocs(docs); this.setState({docs}); const p=this._persistDocsNow(docs,true,prev); p.then(ok=>{if(ok){this.__docsUserWarned=false;return;}if(!this.__docsUserWarned){this.__docsUserWarned=true;this.toast('Storage warning: this change is active now but may not survive a reload. Check browser site-storage permissions.');}}); return p; }
+  saveDocs(docs,opts){ const prev=this.state.docs; docs=this._normalizeDocs(docs); this.setState({docs}); const p=this._persistDocsNow(docs,true,prev,opts); p.then(ok=>{if(ok){this.__docsUserWarned=false;return;}if(!this.__docsUserWarned){this.__docsUserWarned=true;this.toast('Storage warning: this change is active now but may not survive a reload. Check browser site-storage permissions.');}}); return p; }
   /* ===================== COURSE COMPLETION MANAGEMENT (admin-only void/recalc) =====================
      A "completion record" is synthesized from two sources of truth:
        1) the staff roster record (rec[code]/dt[code]) — the compliance driver, and
@@ -12391,14 +12391,17 @@ class Component extends DCLogic {
     p.reactivateIds.forEach(id=>{const st=nextById.get(String(id))||{};staffChanges.push({staffId:id,name:st.name||'',pos:st.pos||'',loc:st.loc||'',h:st.h||'',mgrId:st.mgrId||'',action:'Restored',source:'Import batch',batchId:p.batchId,batchName:bName,notes:'Source status active'});});
     primaryUpdatedStaff.forEach(r=>staffChanges.push({staffId:r.id,name:r.name,pos:r.pos||'',loc:r.loc||'',h:r.h||'',mgrId:r.mgrId||'',action:'Updated',source:'Import batch',batchId:p.batchId,batchName:bName,notes:r.changeNote||'Updated fields',changes:r.changes||null}));
     docs=this.logStaffChanges(staffChanges,docs);
+    // The saves below await; another tab's changes adopted meanwhile must survive, so the import's
+    // changes are re-applied onto whatever docs/operational state is current when they are committed.
+    const docsImp=docs,opsAt=this._opsLocal(),opsNext={roster:nextRoster,sessions:close.sessions,requests:close.requests,notifQueue:close.notifQueue},opsNow=()=>this._xtMergeRecord(Object.keys(opsNext),opsAt,null,opsNext,this.state,this._opsMergeSpecs()).v;let docsCur0=this.state.docs;
     const store=this.SS(),storeSnap=store&&store.snapshot?store.snapshot():null,oldDocs=this.state.docs,oldDocsSnapshot=this._docsUndoSnapshot(oldDocs),oldOperational=this._opsSnapshot(),changedIds=new Set([...(p.addActive||[]).map(r=>String(r.id)),...(p.addArchived||[]).map(r=>String(r.id)),...(p.updatedStaff||[]).map(r=>String(r.id)),...(p.reactivateIds||[]).map(String)]);let storeResult={},undoSaved=false;
     const createdIds=[...(p.addActive||[]),...(p.addArchived||[])].map(r=>String(r.id)), covers=[createdIds.length+' staff created (removed on undo)',primaryUpdatedCount+' staff updated (fields restored)',p.archiveIds.length+' archived (restored to active)',p.reactivateIds.length+' reactivated (archived again)',close.rosterRemoved+' future session seat(s), '+close.requestsWithdrawn+' request(s) and '+close.remindersCancelled+' reminder(s) withdrawn (restored)','Online/video assignment changes (restored only if video training was not changed since)'];
     const postSig=this._staffImportUndoSig({docs,roster:nextRoster,sessions:close.sessions,requests:close.requests});
     try{await this._opsPut('lastStaffImportUndo',{v:2,batchId:p.batchId,filename:p.filename,importType:p.importType||'Staff Import',savedAt:new Date().toISOString(),storeSnap,archivedBefore:(oldDocs.archived||[]).slice(),operational:oldOperational,createdIds,covers,postSig});undoSaved=true;}catch(_undoErr){}
-    try{if(store&&store.applyStaffImportLifecycle)storeResult=store.applyStaffImportLifecycle({batch_id:p.batchId,records:nextRoster.filter(r=>changedIds.has(String(r.id))),archive_ids:[...p.archiveIds,...(p.addArchived||[]).map(r=>r.id)],reactivate_ids:p.reactivateIds},actor)||{};if(!(await this._persistDocsNow(docs,false,oldDocs)))throw new Error('Docs persistence failed during staff import');await this._opsPut('operational',{roster:nextRoster,sessions:close.sessions,requests:close.requests,notifQueue:close.notifQueue,cancelledSessions:this.state.cancelledSessions||[],commLog:this.state.commLog||[],reminderSettings:this.state.reminderSettings||{},notifPrefs:this.state.notifPrefs||{},notifTemplates:this.state.notifTemplates||{},twilioReadiness:this.state.twilioReadiness||{},updatedAt:t.iso,batchId:p.batchId});try{localStorage.removeItem('hasc_import_roster_v2');localStorage.removeItem('hasc_import_ops_v2');localStorage.setItem('hasc_import_ops_ping_v3',t.iso);this._docsPing();}catch(_e){}}
+    try{if(store&&store.applyStaffImportLifecycle)storeResult=store.applyStaffImportLifecycle({batch_id:p.batchId,records:nextRoster.filter(r=>changedIds.has(String(r.id))),archive_ids:[...p.archiveIds,...(p.addArchived||[]).map(r=>r.id)],reactivate_ids:p.reactivateIds},actor)||{};docsCur0=this.state.docs;docs=docsCur0===oldDocs?docsImp:this._docsMerge(oldDocs,null,docsImp,docsCur0).v;if(!(await this._persistDocsNow(docs,false,oldDocs)))throw new Error('Docs persistence failed during staff import');await this._opsPut('operational',{...opsNow(),cancelledSessions:this.state.cancelledSessions||[],commLog:this.state.commLog||[],reminderSettings:this.state.reminderSettings||{},notifPrefs:this.state.notifPrefs||{},notifTemplates:this.state.notifTemplates||{},twilioReadiness:this.state.twilioReadiness||{},updatedAt:t.iso,batchId:p.batchId});try{localStorage.removeItem('hasc_import_roster_v2');localStorage.removeItem('hasc_import_ops_v2');localStorage.setItem('hasc_import_ops_ping_v3',t.iso);this._docsPing();}catch(_e){}}
     catch(err){try{if(store&&storeSnap&&store.replaceSnapshot)store.replaceSnapshot(storeSnap);const restored=this._docsFromUndoSnapshot(oldDocsSnapshot)||oldDocs;if(restored&&!(await this._persistDocsNow(restored,false,null)))throw new Error('Could not restore docs during import rollback');if(oldOperational)await this._opsPut('operational',oldOperational);if(undoSaved)await this._opsPut('lastStaffImportUndo',null);}catch(_e){}this.setState({lastImportUndoAvailable:false,lastImportUndoLabel:'',empeonMsg:'Import rolled back. No changes were applied: '+String(err&&err.message||err)});this.toast('Import rolled back — no changes applied.');return;}
     const summary={importType:p.importType||'Staff Import',filename:p.filename,when:t.display,rowCount:p.totalRows||0,newCount:p.addActive.length+p.addArchived.length,skippedInactive:p.skippedHistoricalInactive||0,heldIncompleteActive:p.heldIncompleteActive||0,updatedCount:primaryUpdatedCount,archivedCount:p.archiveIds.length,reactivatedCount:p.reactivateIds.length,unmappedLoc:p.unmappedLocCount||0,sensitiveIgnored:p.ignoredSensitive||[],sourceColumnsUsed:(p.usedSourceColumns||[]).length,sourceColumnsDiscarded:(p.discardedSourceColumns||[]).length,trainingImpactCount:(p.trainingImpact||[]).length,supervisorFallbackCount:p.supervisorFallbackCount||0,supervisorReviewCount:((p.review&&p.review.supervisorReview&&p.review.supervisorReview.count)||0),missingFromSourceCount:p.archiveMissingCount||0,blockedCount:p.blockedCount,undoAvailable:undoSaved,rosterRemoved:close.rosterRemoved,requestsWithdrawn:close.requestsWithdrawn,remindersCancelled:close.remindersCancelled,assignmentsWithdrawn:(storeResult.video_assignments_withdrawn||0)+(storeResult.course_assignments_withdrawn||0)};
-    this.setState({roster:nextRoster,sessions:close.sessions,requests:close.requests,notifQueue:close.notifQueue,docs,pendingImport:null,importSummary:summary,impFormat:'',importSourceText:'',importSourceName:'',importManualOverrides:{},importFixDirty:false,importFixMsg:'',lastImportUndoAvailable:undoSaved,lastImportUndoLabel:undoSaved?((p.importType||'Staff Import')+' · '+p.filename):'',empeonMsg:'Import applied atomically: '+p.addActive.length+' active staff created, '+primaryUpdatedCount+' updated, '+p.archiveIds.length+' archived, '+p.reactivateIds.length+' restored, '+(p.skippedHistoricalInactive||0)+' historical inactive skipped, '+(p.heldIncompleteActive||0)+' incomplete active held, '+p.blockedCount+' blocked.'},()=>{
+    this.setState(s=>({...this._xtMergeRecord(Object.keys(opsNext),opsAt,null,opsNext,s,this._opsMergeSpecs()).v,docs:s.docs===docsCur0?docs:this._docsMerge(oldDocs,null,docsImp,s.docs).v,pendingImport:null,importSummary:summary,impFormat:'',importSourceText:'',importSourceName:'',importManualOverrides:{},importFixDirty:false,importFixMsg:'',lastImportUndoAvailable:undoSaved,lastImportUndoLabel:undoSaved?((p.importType||'Staff Import')+' · '+p.filename):'',empeonMsg:'Import applied atomically: '+p.addActive.length+' active staff created, '+primaryUpdatedCount+' updated, '+p.archiveIds.length+' archived, '+p.reactivateIds.length+' restored, '+(p.skippedHistoricalInactive||0)+' historical inactive skipped, '+(p.heldIncompleteActive||0)+' incomplete active held, '+p.blockedCount+' blocked.'}),()=>{
       const by=new Map(nextRoster.map(r=>[String(r.id),r]));try{this.arRunForStaff((p.addActive||[]).map(r=>by.get(String(r.id))).filter(Boolean),'hire');this.arRunForStaff((p.reactivateIds||[]).map(id=>by.get(String(id))).filter(Boolean),'reactivate');const archivedNow=new Set([...(p.archiveIds||[]),...(p.addArchived||[]).map(r=>r.id)].map(String));const lifecycle=(p.updatedStaff||[]).filter(r=>!archivedNow.has(String(r.id))&&r.assignmentRelevant).map(r=>by.get(String(r.id))).filter(Boolean);this.arRunForStaff(lifecycle,'lifecycle');if(undoSaved&&store&&store.get){const sv=Number((store.get()||{}).version||0);this._opsGet('lastStaffImportUndo').then(u=>{if(u&&u.batchId===p.batchId)return this._opsPut('lastStaffImportUndo',{...u,storeVersionAfter:sv});}).catch(()=>{});}}catch(err){this.logAudit('Post-import assignment reconciliation failed',{target:p.filename,notes:String(err&&err.message||err),sev:'Critical',relatedId:p.batchId});}
       const lifecycleAudits=[];p.archiveIds.forEach(id=>{const st=by.get(String(id))||{};lifecycleAudits.push({action:'Staff archived/inactivated (import)',staff:st.name||id,prev:'active',next:'archived',notes:'Operational closeout applied; history preserved',sev:'Compliance',relatedId:id});});p.reactivateIds.forEach(id=>{const st=by.get(String(id))||{};lifecycleAudits.push({action:'Staff reactivated (import)',staff:st.name||id,prev:'archived',next:'active',notes:'Requirements recalculated',sev:'Compliance',relatedId:id});});this.logAuditBatch(lifecycleAudits);
       this._mirrorToService('import.apply',S=>S.createImportBatch({filename:p.filename,rowsParsed:p.totalRows,rowsCreated:createdCount,rowsUpdated:primaryUpdatedCount,rowsArchived:p.archiveIds.length,status:'applied'},actor));this.logAudit('Staff import completed',{target:p.filename,next:createdCount+' created / '+primaryUpdatedCount+' updated / '+p.archiveIds.length+' archived / '+p.reactivateIds.length+' restored / '+(p.skippedHistoricalInactive||0)+' historical inactive skipped / '+(p.heldIncompleteActive||0)+' incomplete active held / '+p.blockedCount+' blocked',notes:'Atomic browser transaction · '+(p.supervisorFallbackCount||0)+' supervisor placeholder(s) assigned · '+close.rosterRemoved+' future roster seat(s) removed · '+close.requestsWithdrawn+' request(s) withdrawn · '+close.remindersCancelled+' reminder job(s) cancelled · '+summary.assignmentsWithdrawn+' online assignment(s) withdrawn',sev:'Info',relatedId:p.batchId});this.toast('Import applied.');});
@@ -12434,12 +12437,12 @@ class Component extends DCLogic {
       let docs={...cur,archived:archivedBefore.slice(),importBatches:(cur.importBatches||[]).map(b=>b&&b.id===snap.batchId?{...b,undoneAt:nowIso,undoneBy:who}:b)};
       docs=this._normalizeDocs(docs);
       const baseRoster=Array.isArray(op.roster)?op.roster:this.state.roster, roster=this.applyCompletionsToRoster(this.applyVoidsToRoster(baseRoster,docs),docs);
-      const next={roster,sessions:Array.isArray(op.sessions)?op.sessions:this.state.sessions,requests:Array.isArray(op.requests)?op.requests:this.state.requests,notifQueue:Array.isArray(op.notifQueue)?op.notifQueue:this.state.notifQueue};
+      const next={roster,sessions:Array.isArray(op.sessions)?op.sessions:this.state.sessions,requests:Array.isArray(op.requests)?op.requests:this.state.requests,notifQueue:Array.isArray(op.notifQueue)?op.notifQueue:this.state.notifQueue},nextAt=this._opsLocal(),nextNow=st=>this._xtMergeRecord(Object.keys(next),nextAt,null,next,st,this._opsMergeSpecs()).v;
       if(!(await this._persistDocsNow(docs,false,cur)))throw new Error('Could not save the restored archive list');
-      await this._opsPut('operational',{...this._opsSnapshot(),...next,updatedAt:nowIso});
+      await this._opsPut('operational',{...this._opsSnapshot(),...nextNow(this.state),updatedAt:nowIso});
       await this._opsPut('lastStaffImportUndo',null);
       try{localStorage.setItem('hasc_import_ops_ping_v3',nowIso);this._docsPing();}catch(_e){}
-      this.setState({...next,docs,lastImportUndoAvailable:false,lastImportUndoLabel:'',importSummary:null,empeonMsg:'Last staff import was undone: '+covers.join('; ')+'.'+storeNote},()=>{this.logAudit('Staff import undone',{target:snap.filename||snap.batchId||'Last import',notes:'Reversed: '+covers.join('; ')+'. Later training records and settings kept.'+storeNote,sev:'Compliance',relatedId:snap.batchId||''});this.toast('Last staff import undone.');});
+      this.setState(s=>({...nextNow(s),docs:s.docs===cur?docs:this._docsMerge(cur,null,docs,s.docs).v,lastImportUndoAvailable:false,lastImportUndoLabel:'',importSummary:null,empeonMsg:'Last staff import was undone: '+covers.join('; ')+'.'+storeNote}),()=>{this.logAudit('Staff import undone',{target:snap.filename||snap.batchId||'Last import',notes:'Reversed: '+covers.join('; ')+'. Later training records and settings kept.'+storeNote,sev:'Compliance',relatedId:snap.batchId||''});this.toast('Last staff import undone.');});
     }catch(err){this.toast('Could not undo the import: '+String(err&&err.message||err));}
   }
   openSheet(id){ this.setState({modal:{type:'sheet',sessionId:id}}); }
@@ -12759,7 +12762,8 @@ class Component extends DCLogic {
     window.addEventListener('keydown',this._onKeyEsc); window.addEventListener('storage',this._onStorageSync);
     // Debounced saves (ops 800 ms, shared store 700 ms) are flushed when the page is hidden or
     // unloaded so a quick reload/close does not drop the last change.
-    this._onPageHideFlush=()=>this._flushPendingPersist(); this._onVisFlush=()=>{ if(document.visibilityState==='hidden') this._flushPendingPersist(); };
+    this._onPageHideFlush=()=>this._flushPendingPersist(); this._onVisFlush=()=>{ if(document.visibilityState==='hidden') this._flushPendingPersist(); else if(document.visibilityState==='visible') this._resyncFromStore(); };
+    this._onPageShow=(e)=>{ if(e&&e.persisted) this._resyncFromStore(); }; window.addEventListener('pageshow',this._onPageShow);
     window.addEventListener('pagehide',this._onPageHideFlush); window.addEventListener('beforeunload',this._onPageHideFlush); document.addEventListener('visibilitychange',this._onVisFlush);
     if(window.HASCStore){ this._storeDirtyUnsub=window.HASCStore.subscribe(()=>{ this._storeDirty=true; }); }
     if(window.HASCStore){ this._storeUnsub=window.HASCStore.subscribe(()=>{ if(this._storeRenderQueued) return; this._storeRenderQueued=true; const raf=(window.requestAnimationFrame||((fn)=>setTimeout(fn,0))); raf(()=>{ this._storeRenderQueued=false; this.setState(st=>({storeVer:(st.storeVer||0)+1})); }); }); }
@@ -12778,14 +12782,15 @@ class Component extends DCLogic {
   async _opsGetMany(keys){ const db=await this._opsDB(); return new Promise((res,rej)=>{const tx=db.transaction('kv','readonly'),st=tx.objectStore('kv'),out={},list=[...new Set(keys||[])];if(!list.length){res(out);return;}let left=list.length;list.forEach(k=>{const q=st.get(k);q.onsuccess=()=>{out[k]=q.result===undefined?null:q.result;if(--left===0)res(out);};q.onerror=()=>rej(q.error||tx.error);});tx.onerror=()=>rej(tx.error);tx.onabort=()=>rej(tx.error);}); }
   async _opsPut(key,value){
     // Direct whole-record writes (applyImport, undo, rollback) are merged like the debounced save.
-    if(key==='operational'&&this._opsBase&&value&&typeof value==='object')return this._enqueueOps(async()=>{ await this._opsMergePut(value); const b={...this._opsBase}; this._opsKeys().forEach(k=>{ if(value[k]!==undefined)b[k]=value[k]; }); this._opsBase=b; this._opsRev=null; return true; });
+    if(key==='operational'&&this._opsBase&&value&&typeof value==='object')return this._enqueueOps(async()=>{ await this._opsMergePut(value); const b={...this._opsBase}; this._opsKeys().forEach(k=>{ if(value[k]!==undefined)b[k]=value[k]; }); this._opsAlt=this._xtAlts(this._opsAlt,this._opsBase); this._opsBase=b; this._opsRev=null; return true; });
     const db=await this._opsDB();
     if(key==='operational'&&value&&typeof value==='object'){ value={...value,rev:this._xtRev()}; this.__opsPlainRev=value.rev;
       return new Promise((res,rej)=>{const tx=db.transaction('kv','readwrite'),st=tx.objectStore('kv'),q=st.get('operational');st.put(value,key);q.onsuccess=()=>{ const r=q.result&&q.result.rev; if(r!=null)st.put(1,'ops_child_of_'+r); };tx.oncomplete=()=>res(true);tx.onerror=()=>rej(tx.error);tx.onabort=()=>rej(tx.error);}); } return new Promise((res,rej)=>{const tx=db.transaction('kv','readwrite');tx.objectStore('kv').put(value,key);tx.oncomplete=()=>res(true);tx.onerror=()=>rej(tx.error);tx.onabort=()=>rej(tx.error);}); }
   async _opsDelete(key){ const db=await this._opsDB(); return new Promise((res,rej)=>{const tx=db.transaction('kv','readwrite');tx.objectStore('kv').delete(key);tx.oncomplete=()=>res(true);tx.onerror=()=>rej(tx.error);tx.onabort=()=>rej(tx.error);}); }
   async _opsPutMany(entries){ const rows=(entries||[]).filter(x=>x&&x.length>=2);if(!rows.length)return true;const db=await this._opsDB();return new Promise((res,rej)=>{const tx=db.transaction('kv','readwrite'),st=tx.objectStore('kv');rows.forEach(x=>st.put(x[1],x[0]));tx.oncomplete=()=>res(true);tx.onerror=()=>rej(tx.error);tx.onabort=()=>rej(tx.error);}); }
   _opsSnapshot(extra){ return Object.assign({roster:this.state.roster||[],sessions:this.state.sessions||[],requests:this.state.requests||[],notifQueue:this.state.notifQueue||[],cancelledSessions:this.state.cancelledSessions||[],commLog:this.state.commLog||[],reminderSettings:this.state.reminderSettings||{},notifPrefs:this.state.notifPrefs||{},notifTemplates:this.state.notifTemplates||{},twilioReadiness:this.state.twilioReadiness||{},instructors:this.state.instructors||[],instructorRosterV:this.state.instructorRosterV||0,auditLog:(this.state.auditLog||[]).slice(0,20000),locations:this.state.locations||[],updatedAt:new Date().toISOString()},extra||{}); }
-  _flushPendingPersist(){ if(!this._dataReady) return; if(this._opsPersistT){ clearTimeout(this._opsPersistT); this._opsPersistT=null; try{ this._opsPersistRun(true); }catch(e){} }
+  _flushPendingPersist(){ if(!this._dataReady) return;
+    if(this._opsPersistT){ clearTimeout(this._opsPersistT); this._opsPersistT=null; try{ this._opsPersistRun(true); }catch(e){} }
     if(this._storeDirty&&window.HASCStore&&typeof window.HASCStore.get==='function'){ this._storeDirty=false; try{ this._opsPut('sharedStore',window.HASCStore.get()).catch(()=>{}); }catch(e){} } }
   _scheduleOperationalPersist(){
     if(this._opsPersistT) clearTimeout(this._opsPersistT);
@@ -12793,59 +12798,61 @@ class Component extends DCLogic {
   }
   // ===== Cross-tab persistence (IMP-08) =====
   // Every open tab writes to the same IndexedDB. Each write is a three-way merge done inside ONE
-  // readwrite transaction (read then put, so no other tab can interleave): base = what this tab last
-  // loaded or wrote (in state form), local = this tab now, remote = the stored copy. State is updated
-  // immutably, so `local!==base` per key and per row marks this tab's own changes; anything this tab
-  // did not change is taken from the stored copy. alt = this tab's value just before it adopted a
-  // merge: an async flow that computed from it (applyImport, undo) must not look like it reverted the
-  // other tab's rows. A per-store rev token lets an uncontended write skip the merge.
+  // readwrite transaction: base = what this tab last loaded or wrote (in state form), local = this
+  // tab now, remote = the stored copy. State is updated immutably, so `local!==base` per key and per
+  // row marks this tab's own changes; anything this tab did not change is taken from the stored copy.
+  // alts = every other value this tab has held since its last clean write (its values before each
+  // merge it adopted, the base before a direct write). Async flows can still hold one of them, so a
+  // value equal to ANY of them is not a local change, and a row counts as deleted here only if base
+  // and every alt had it: a stale copy lacking rows that arrived later can never delete them.
   _xtRev(){ return Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,10); }
   _xtPlain(o){ return !!o&&typeof o==='object'&&!Array.isArray(o); }
+  _xtAlts(list,v){ const out=(list||[]).filter(x=>x&&x!==v); if(v)out.push(v); return out.length?out.slice(-12):null; }
   _xtSameList(a,b){ if(a===b)return true; if(!Array.isArray(a)||!Array.isArray(b)||a.length!==b.length)return false; for(let i=0;i<a.length;i++)if(a[i]!==b[i])return false; return true; }
   _xtKeyFn(spec,arrs){ if(spec&&spec.key)return spec.key; for(const f of ['id','voidId','instructorId']){ if(arrs.every(a=>a.every(x=>x&&typeof x==='object'&&x[f]!=null&&x[f]!=='')))return x=>String(x[f]); } return null; }
+  // Audit entries carry an id since IMP-08; older ones are keyed by their content.
+  _auditKey(e){ if(!e||typeof e!=='object')return null; if(e.id!=null&&e.id!=='')return 'id:'+e.id; return ['c',e.ts,e.user,e.role,e.action,e.staff,e.target,e.prev,e.next,e.notes,e.relatedId].map(x=>x==null?'':String(x)).join('|'); }
   // [key,row] pairs; a repeated key gets an occurrence suffix so duplicate rows are kept, not collapsed.
   _xtKeyed(a,kf){ const out=[],n=new Map(); for(const x of a||[]){ const k0=kf(x); if(k0==null||k0==='')return null; const c=n.get(k0)||0; n.set(k0,c+1); out.push([c?k0+'\u0001'+c:k0,x]); } return out; }
   // Rows with a stable id: start from remote, overlay rows this tab changed, drop rows it deleted,
   // add rows it created (appended; prepended for newest-first logs). A row the other tab deleted
   // stays deleted even if this tab edited it.
-  _xtMergeRows(b,alt,l,r,kf,log,cap){
-    const bk=this._xtKeyed(b,kf),ak=alt?this._xtKeyed(alt,kf):null,lk=this._xtKeyed(l,kf),rk=this._xtKeyed(r,kf); if(!bk||!lk||!rk||(alt&&!ak))return null;
-    const bm=new Map(bk),am=ak?new Map(ak):null,lm=new Map(lk),same=(k,x)=>bm.get(k)===x||(!!am&&am.get(k)===x),known=k=>bm.has(k)||(!!am&&am.has(k)),delLocal=k=>bm.has(k)&&(!am||am.has(k));
+  _xtMergeRows(b,alts,l,r,kf,log,cap){
+    const bk=this._xtKeyed(b,kf),lk=this._xtKeyed(l,kf),rk=this._xtKeyed(r,kf); if(!bk||!lk||!rk)return null;
+    const ams=[]; for(const a of alts||[]){ if(!Array.isArray(a))continue; const ak=this._xtKeyed(a,kf); if(!ak)return null; ams.push(new Map(ak)); }
+    const bm=new Map(bk),lm=new Map(lk),same=(k,x)=>bm.get(k)===x||ams.some(m=>m.get(k)===x),known=k=>bm.has(k)||ams.some(m=>m.has(k)),delLocal=k=>bm.has(k)&&ams.every(m=>m.has(k));
     const out=[],add=[],seen=new Set(); let fromLocal=false;
     for(const [k,x] of rk){ seen.add(k); const lx=lm.get(k); if(lx===undefined){ if(delLocal(k)){fromLocal=true;continue;} out.push(x); continue; } if(lx===x||same(k,lx)){out.push(x);continue;} out.push(lx); fromLocal=true; }
     for(const [k,x] of lk){ if(seen.has(k)||known(k))continue; add.push(x); fromLocal=true; }
     let v=log?add.concat(out):out.concat(add); if(cap&&v.length>cap)v=v.slice(0,cap);
     return {v,fromLocal,fromRemote:!this._xtSameList(v,l)}; }
-  // Append-only log without ids (audit trail): entries this tab added (by identity) go first.
-  _xtMergeIdLog(b,alt,l,r,cap){ const known=new Set(b||[]); (alt||[]).forEach(x=>known.add(x)); const add=(l||[]).filter(x=>!known.has(x)); let v=add.length?add.concat(r||[]):(r||[]); if(cap&&v.length>cap)v=v.slice(0,cap); return {v,fromLocal:add.length>0,fromRemote:!this._xtSameList(v,l)}; }
   // Arrays of primitives (archived ids): remote + added locally - removed locally.
-  _xtMergeSet(b,alt,l,r){ const S=a=>new Set((a||[]).map(String)),bs=S(b),as=alt?S(alt):null,ls=S(l),seen=new Set(),out=[]; let fromLocal=false;
-    for(const x of r||[]){ const k=String(x); if(seen.has(k))continue; seen.add(k); if(!ls.has(k)&&bs.has(k)&&(!as||as.has(k))){fromLocal=true;continue;} out.push(x); }
-    for(const x of l||[]){ const k=String(x); if(seen.has(k)||bs.has(k)||(as&&as.has(k)))continue; seen.add(k); out.push(x); fromLocal=true; }
+  _xtMergeSet(b,alts,l,r){ const S=a=>new Set((a||[]).map(String)),bs=S(b),as=(alts||[]).filter(Array.isArray).map(S),ls=S(l),seen=new Set(),out=[]; let fromLocal=false;
+    for(const x of r||[]){ const k=String(x); if(seen.has(k))continue; seen.add(k); if(!ls.has(k)&&bs.has(k)&&as.every(s=>s.has(k))){fromLocal=true;continue;} out.push(x); }
+    for(const x of l||[]){ const k=String(x); if(seen.has(k)||bs.has(k)||as.some(s=>s.has(k)))continue; seen.add(k); out.push(x); fromLocal=true; }
     const os=S(out); return {v:out,fromLocal,fromRemote:os.size!==ls.size||[...ls].some(k=>!os.has(k))}; }
   // Settings maps: per-key overlay of the keys this tab changed or removed.
-  _xtMergeObj(b,alt,l,r){ const out={...r}; let fromLocal=false;
-    for(const k of Object.keys(l)){ const lv=l[k]; if(lv===b[k]||(alt&&lv===alt[k])||lv===r[k])continue; out[k]=lv; fromLocal=true; }
-    for(const k of Object.keys(b)){ if(!(k in l)&&(!alt||k in alt)&&(k in out)){ delete out[k]; fromLocal=true; } }
+  _xtMergeObj(b,alts,l,r){ const out={...r},as=(alts||[]).filter(a=>this._xtPlain(a)); let fromLocal=false;
+    for(const k of Object.keys(l)){ const lv=l[k]; if(lv===b[k]||as.some(a=>lv===a[k])||lv===r[k])continue; out[k]=lv; fromLocal=true; }
+    for(const k of Object.keys(b)){ if(!(k in l)&&as.every(a=>k in a)&&(k in out)){ delete out[k]; fromLocal=true; } }
     const ok=Object.keys(out); return {v:out,fromLocal,fromRemote:ok.length!==Object.keys(l).length||ok.some(k=>out[k]!==l[k])}; }
-  _xtMergeValue(b,alt,l,r,spec){
+  _xtMergeValue(b,alts,l,r,spec){
     if(l===undefined)return {v:r,fromLocal:false,fromRemote:r!==undefined};
     if(r===undefined||r===null)return {v:l,fromLocal:l!==null,fromRemote:false};
-    if(l===b||(alt!==undefined&&l===alt))return {v:r,fromLocal:false,fromRemote:r!==l};
-    if(Array.isArray(l)&&Array.isArray(r)){ const B=Array.isArray(b)?b:[],A=Array.isArray(alt)?alt:null;
-      if(spec&&spec.idlog)return this._xtMergeIdLog(B,A,l,r,spec.cap);
-      const arrs=[B,l,r].concat(A?[A]:[]);
+    if(l===b||(alts&&alts.some(a=>a!==undefined&&l===a)))return {v:r,fromLocal:false,fromRemote:r!==l};
+    if(Array.isArray(l)&&Array.isArray(r)){ const B=Array.isArray(b)?b:[],A=(alts||[]).filter(Array.isArray);
+      const arrs=[B,l,r].concat(A);
       if(arrs.every(a=>a.every(x=>x===null||typeof x!=='object')))return this._xtMergeSet(B,A,l,r);
       const kf=this._xtKeyFn(spec,arrs),m=kf?this._xtMergeRows(B,A,l,r,kf,spec&&spec.log,spec&&spec.cap):null; if(m)return m;
       return {v:l,fromLocal:true,fromRemote:false}; }
-    if(this._xtPlain(l)&&this._xtPlain(r))return this._xtMergeObj(this._xtPlain(b)?b:{},this._xtPlain(alt)?alt:null,l,r);
+    if(this._xtPlain(l)&&this._xtPlain(r))return this._xtMergeObj(this._xtPlain(b)?b:{},alts,l,r);
     return {v:l,fromLocal:true,fromRemote:false}; }
-  _xtMergeRecord(keys,b,alt,l,r,specs){ const v={}; let fromLocal=false,fromRemote=false;
-    for(const k of keys){ const m=this._xtMergeValue(b?b[k]:undefined,alt?alt[k]:undefined,l[k],r?r[k]:undefined,specs[k]); if(m.v!==undefined)v[k]=m.v; if(m.fromLocal)fromLocal=true; if(m.fromRemote)fromRemote=true; }
+  _xtMergeRecord(keys,b,alts,l,r,specs){ const v={}; let fromLocal=false,fromRemote=false;
+    for(const k of keys){ const m=this._xtMergeValue(b?b[k]:undefined,alts&&alts.length?alts.map(a=>a?a[k]:undefined):null,l[k],r?r[k]:undefined,specs[k]); if(m.v!==undefined)v[k]=m.v; if(m.fromLocal)fromLocal=true; if(m.fromRemote)fromRemote=true; }
     return {v,fromLocal,fromRemote}; }
   // ---- operational state (roster, sessions, requests, queue, audit trail, …) ----
   _opsKeys(){ return ['roster','sessions','requests','notifQueue','cancelledSessions','commLog','reminderSettings','notifPrefs','notifTemplates','twilioReadiness','instructors','instructorRosterV','auditLog','locations']; }
-  _opsMergeSpecs(){ return {auditLog:{idlog:true,cap:20000},commLog:{log:true}}; }
+  _opsMergeSpecs(){ return {auditLog:{key:e=>this._auditKey(e),log:true,cap:20000},commLog:{log:true}}; }
   _opsLocal(){ const o={}; this._opsKeys().forEach(k=>{ if(this.state[k]!==undefined)o[k]=this.state[k]; }); return o; }
   _opsDirty(){ const b=this._opsBase; return !!b&&this._opsKeys().some(k=>this.state[k]!==undefined&&this.state[k]!==b[k]); }
   _enqueueOps(fn){ const p=(this.__opsChain||Promise.resolve()).catch(()=>{}).then(fn); this.__opsChain=p.catch(()=>{}); return p; }
@@ -12860,39 +12867,45 @@ class Component extends DCLogic {
       else o[k]=v; });
     return o; }
   // Compare-and-swap write of the operational record (see _xtLineage); rev/opsLineage live in the record.
-  _opsMergePut(local){ return this._opsTryPut(local,true).then(r=>r||this._opsTryPut(local,false)); }
-  _opsTryPut(local,tryOptimistic){ return this._opsDB().then(db=>new Promise((res,rej)=>{ const base=this._opsBase,alt=this._opsAlt,rev0=this._opsRev,keys=this._opsKeys(),specs=this._opsMergeSpecs();
-    const tx=db.transaction('kv','readwrite'),st=tx.objectStore('kv'); let out=null,conflict=false;
+  // replace=true (backup restore) writes local verbatim instead of merging.
+  _opsMergePut(local,replace){ return this._opsTryPut(local,!replace,replace).then(r=>r||this._opsTryPut(local,false,replace)); }
+  _opsTryPut(local,tryOptimistic,replace){ return this._opsDB().then(db=>new Promise((res,rej)=>{ const keys=this._opsKeys(),specs=this._opsMergeSpecs(),alts=this._opsAlt;
+    // While this tab's own previous write is still committing (e.g. the pagehide flush right after a
+    // debounced save), build on that write: transactions commit in creation order.
+    const pend=this.__opsPending,base=pend?pend.base:this._opsBase,rev0=pend?pend.rev:this._opsRev,extra0=pend?pend.extra:this.__opsExtra;
+    const tx=db.transaction('kv','readwrite'),st=tx.objectStore('kv'); let out=null,conflict=false,myRev=null;
     const extraOf=o=>{ const e={}; Object.keys(o||{}).forEach(k=>{ if(!keys.includes(k))e[k]=o[k]; }); return e; };
     const put=(storedExtra,m,baseRev)=>{ const le=extraOf(local),lin=this._xtLineage(baseRev,storedExtra&&storedExtra.opsLineage),rec=Object.assign({},storedExtra,le,m.v,{updatedAt:le.updatedAt||new Date().toISOString(),rev:this._xtRev(),opsLineage:lin.keep}); if(Array.isArray(rec.auditLog)&&rec.auditLog.length>20000)rec.auditLog=rec.auditLog.slice(0,20000);
-      st.put(rec,'operational'); lin.drop.forEach(r=>st.delete('ops_child_of_'+r)); out={merged:m.v,fromRemote:!!m.fromRemote,rev:rec.rev,updatedAt:rec.updatedAt,extra:extraOf(rec)}; };
+      st.put(rec,'operational'); lin.drop.forEach(r=>st.delete('ops_child_of_'+r)); myRev=rec.rev; out={merged:m.v,fromRemote:!!m.fromRemote,rev:rec.rev,updatedAt:rec.updatedAt,extra:extraOf(rec)};
+      this.__opsPending={rev:rec.rev,base:m.fromRemote?Object.assign({},local,m.v):local,extra:out.extra}; };
+    const done=()=>{ if(this.__opsPending&&this.__opsPending.rev===myRev)this.__opsPending=null; };
     const fail=err=>{ try{tx.abort();}catch(_e){} rej(err); };
-    tx.oncomplete=()=>{ if(out)this.__opsExtra=out.extra; res(out); }; tx.onerror=()=>{ if(!conflict)rej(tx.error); }; tx.onabort=()=>{ if(conflict)res(null); else rej(tx.error||new Error('IndexedDB write aborted')); };
+    tx.oncomplete=()=>{ done(); if(out)this.__opsExtra=out.extra; res(out); }; tx.onerror=()=>{ if(!conflict)rej(tx.error); }; tx.onabort=()=>{ done(); if(conflict)res(null); else rej(tx.error||new Error('IndexedDB write aborted')); };
     try{
-      if(tryOptimistic&&base&&rev0!=null&&this.__opsExtra){ const cas=st.add(1,'ops_child_of_'+rev0); cas.onerror=()=>{ conflict=true; }; put(this.__opsExtra,alt?this._xtMergeRecord(keys,base,alt,local,base,specs):{v:local,fromRemote:false},rev0); return; }
+      if(tryOptimistic&&base&&rev0!=null&&extra0){ const cas=st.add(Date.now(),'ops_child_of_'+rev0); cas.onerror=()=>{ conflict=true; }; put(extra0,alts?this._xtMergeRecord(keys,base,alts,local,base,specs):{v:local,fromRemote:false},rev0); return; }
       const q=st.get('operational');
       q.onsuccess=()=>{ try{ const stored=q.result||null,cur=stored&&stored.rev!=null?stored.rev:null,fast=!!base&&rev0!=null&&cur===rev0;
-          if(cur!=null)st.put(1,'ops_child_of_'+cur);
-          put(extraOf(stored),(!base||!stored||(fast&&!alt))?{v:local,fromRemote:false}:this._xtMergeRecord(keys,base,alt,local,fast?base:stored,specs),cur);
+          if(cur!=null)st.put(Date.now(),'ops_child_of_'+cur);
+          put(extraOf(stored),(replace||!base||!stored||(fast&&!alts))?{v:local,fromRemote:false}:this._xtMergeRecord(keys,base,alts,local,fast?base:stored,specs),cur);
         }catch(err){ fail(err); } };
       q.onerror=()=>fail(q.error||tx.error);
     }catch(err){ fail(err); } })); }
   // After a merged write: show the merged result, keeping any change made while the write was in flight.
-  _opsAdopt(merged,local){ const keys=this._opsKeys(),H=this._opsHydrated(merged,local),cur=this._opsLocal(),m=this._xtMergeRecord(keys,local,null,cur,H,this._opsMergeSpecs()),patch={};
+  _opsAdopt(merged,local){ const keys=this._opsKeys(),H=this._opsHydrated(merged,local),cur=this._opsLocal(),m=this._xtMergeRecord(keys,local,this._opsAlt,cur,H,this._opsMergeSpecs()),patch={};
     keys.forEach(k=>{ if(m.v[k]!==undefined&&m.v[k]!==cur[k])patch[k]=m.v[k]; });
-    this._opsBase=Object.assign({},local,H); this._opsAlt=local;
+    this._opsBase=Object.assign({},local,H); this._opsAlt=this._xtAlts(this._opsAlt,local);
     if(!Object.keys(patch).length){ if(m.fromLocal)this._scheduleOperationalPersist(); return; }
-    this._hydratingOps=true; this.setState(patch,()=>{ this._hydratingOps=false; this.__memo={}; if(m.fromLocal)this._scheduleOperationalPersist(); }); }
+    this.setState(patch,()=>{ this.__memo={}; if(m.fromLocal)this._scheduleOperationalPersist(); }); }
   // A docs reload re-derives roster rows; those rows are not this tab's own operational edits.
   _opsRebaseRoster(old,next){ if(!Array.isArray(old)||!Array.isArray(next)||old===next)return; const sw=new Map(); old.forEach((r,i)=>{ if(next[i]!==r)sw.set(r,next[i]); }); if(!sw.size)return;
     const fix=o=>{ if(!o||!Array.isArray(o.roster))return o; let ch=false; const ro=o.roster.map(r=>{ const n=sw.get(r); if(n){ch=true;return n;} return r; }); return ch?{...o,roster:ro}:o; };
-    this._opsBase=fix(this._opsBase); this._opsAlt=fix(this._opsAlt); }
-  async _opsPersistRun(flush){
+    this._opsBase=fix(this._opsBase); this._opsAlt=this._opsAlt?this._opsAlt.map(fix):null; }
+  async _opsPersistRun(flush,replace){
     if(!this._dataReady)return; if(this._hydratingOps&&!flush){ this._scheduleOperationalPersist(); return; }
-    if(this._opsBase&&this._opsRev!=null&&!this._opsDirty())return;
+    if(!replace&&this._opsBase&&this._opsRev!=null&&!this._opsDirty())return;
     const local=this._opsLocal();
     try{
-      const r=await this._opsMergePut(local); this._opsRev=r.rev;
+      const r=await this._opsMergePut(local,replace); this._opsRev=r.rev;
       if(this._opsBase){ if(r.fromRemote)this._opsAdopt(r.merged,local); else { this._opsBase=local; this._opsAlt=null; } }
       // Migration is non-destructive: remove legacy quota-heavy copies only after the
       // complete snapshot is safely committed to IndexedDB.
@@ -12905,13 +12918,15 @@ class Component extends DCLogic {
     if(!this._dataReady||!this._opsBase)return;
     const stored=await this._opsGet('operational'); if(!stored||!Array.isArray(stored.roster))return;
     if(stored.rev!=null&&stored.rev===this._opsRev)return;
-    if(this._opsPersistT||this._opsDirty()){ if(this._opsPersistT){clearTimeout(this._opsPersistT);this._opsPersistT=null;} return this._opsPersistRun(); }
+    if(this._opsDirty()){ if(this._opsPersistT){clearTimeout(this._opsPersistT);this._opsPersistT=null;} return this._opsPersistRun(); }
     const local=this._opsLocal(),H=this._opsHydrated(stored,null),patch={};
     this._opsKeys().forEach(k=>{ if(H[k]!==undefined&&H[k]!==local[k])patch[k]=H[k]; });
-    this._opsBase=Object.assign({},local,H); this._opsAlt=null; this._opsRev=stored.rev!=null?stored.rev:null; { const ex={},ks=this._opsKeys(); Object.keys(stored).forEach(k=>{ if(!ks.includes(k))ex[k]=stored[k]; }); this.__opsExtra=ex; }
-    if(Object.keys(patch).length){ this._hydratingOps=true; this.setState(patch,()=>{ this._hydratingOps=false; this.__memo={}; }); }
+    this._opsBase=Object.assign({},local,H); this._opsAlt=this._xtAlts(this._opsAlt,local); this._opsRev=stored.rev!=null?stored.rev:null; { const ex={},ks=this._opsKeys(); Object.keys(stored).forEach(k=>{ if(!ks.includes(k))ex[k]=stored[k]; }); this.__opsExtra=ex; }
+    if(Object.keys(patch).length)this.setState(patch,()=>{ this.__memo={}; });
   }
-  _persistOperationalState(){ return this._enqueueOps(()=>this._opsPersistRun()); }
+  _persistOperationalState(opts){ const replace=!!(opts&&opts.replace); return this._enqueueOps(()=>this._opsPersistRun(false,replace)); }
+  // A page restored from the back/forward cache, or shown again, may have missed storage events.
+  _resyncFromStore(){ if(!this._dataReady)return; this._enqueueOps(()=>this._opsSyncFromStore()).catch(()=>{}); const p=(this.__docsPersistChain||Promise.resolve()).catch(()=>{}).then(()=>this._docsSyncRun()); this.__docsPersistChain=p.then(()=>true,()=>false); }
   async _handleStorageSync(e){
     if(!e||!['hasc_import_ops_ping_v3','hasc_import_roster_v2','hasc_import_ops_v2','hasc_docs_ping_v3','hasc_docs','hasc_scorm_courses_v1','hasc_scorm_progress_v1','hasc_course_library_v1'].includes(e.key)) return;
     // Course Library and SCORM catalog changes have their own lightweight cross-tab keys.
@@ -12921,7 +12936,7 @@ class Component extends DCLogic {
     try{
       if(e.key==='hasc_docs_ping_v3'||e.key==='hasc_docs'){
         // hasc_docs is accepted only as a legacy cross-tab migration signal.
-        if(e.key==='hasc_docs'&&e.newValue){try{const legacy=this._normalizeDocs(JSON.parse(e.newValue));await this._persistAllDocsV5(legacy,false);localStorage.removeItem('hasc_docs');}catch(_legacyErr){}}
+        if(e.key==='hasc_docs'&&e.newValue){try{const legacy=this._normalizeDocs(JSON.parse(e.newValue));const lp=(this.__docsPersistChain||Promise.resolve()).catch(()=>{}).then(()=>this._persistAllDocsV5(legacy,false));this.__docsPersistChain=lp.then(()=>true,()=>false);await lp;localStorage.removeItem('hasc_docs');}catch(_legacyErr){}}
         const p=(this.__docsPersistChain||Promise.resolve()).catch(()=>{}).then(()=>this._docsSyncRun()); this.__docsPersistChain=p.then(()=>true,()=>false); await p; return;
       }
       if(e.key!=='hasc_import_ops_ping_v3'){ let rr=null,oo={},saved=null; try{rr=JSON.parse(localStorage.getItem('hasc_import_roster_v2')||'null');oo=JSON.parse(localStorage.getItem('hasc_import_ops_v2')||'{}')||{};}catch(_e){} if(Array.isArray(rr)||oo&&typeof oo==='object')saved=Object.assign({},oo,{roster:Array.isArray(rr)?rr:(this.state.roster||[])}); if(saved)try{await this._opsPut('operational',saved);}catch(_e){} }
